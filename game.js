@@ -3,19 +3,28 @@ const { Engine, World, Bodies, Body, Composite, Events } = Matter;
 
 // ---- Meyve tanımları (küçükten büyüğe) ----
 const FRUITS = [
-  { emoji: "🍒", r: 16,  color: "#e74c3c" },
-  { emoji: "🍓", r: 22,  color: "#e84393" },
-  { emoji: "🍇", r: 29,  color: "#9b59b6" },
-  { emoji: "🍊", r: 37,  color: "#f39c12" },
-  { emoji: "🍎", r: 45,  color: "#e74c3c" },
-  { emoji: "🍐", r: 54,  color: "#a3cb38" },
-  { emoji: "🍑", r: 63,  color: "#ff9a8b" },
-  { emoji: "🥭", r: 73,  color: "#f6b93b" },
-  { emoji: "🍍", r: 84,  color: "#f1c40f" },
-  { emoji: "🍈", r: 96,  color: "#badc58" },
-  { emoji: "🍉", r: 110, color: "#2ecc71" },
+  { emoji: "🍒", code: "1f352", r: 16,  color: "#e74c3c" },
+  { emoji: "🍓", code: "1f353", r: 22,  color: "#e84393" },
+  { emoji: "🍇", code: "1f347", r: 29,  color: "#9b59b6" },
+  { emoji: "🍊", code: "1f34a", r: 37,  color: "#f39c12" },
+  { emoji: "🍎", code: "1f34e", r: 45,  color: "#e74c3c" },
+  { emoji: "🍐", code: "1f350", r: 54,  color: "#a3cb38" },
+  { emoji: "🍑", code: "1f351", r: 63,  color: "#ff9a8b" },
+  { emoji: "🥭", code: "1f96d", r: 73,  color: "#f6b93b" },
+  { emoji: "🍍", code: "1f34d", r: 84,  color: "#f1c40f" },
+  { emoji: "🍈", code: "1f348", r: 96,  color: "#badc58" },
+  { emoji: "🍉", code: "1f349", r: 110, color: "#2ecc71" },
 ];
 const MAX_TIER = FRUITS.length - 1;
+
+// Emoji resimlerini önceden yükle (her telefonda aynı görünür — Twemoji).
+// Canvas bazı telefonlarda renkli emoji çizemediği için resim kullanıyoruz.
+for (const f of FRUITS) {
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.src = `https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/72x72/${f.code}.png`;
+  f.img = img;
+}
 const SPAWN_MAX_TIER = 4; // sadece ilk 5 meyve düşürülür
 
 // ---- Canvas / boyut ----
@@ -237,11 +246,16 @@ function drawFruit(x, y, tier, alpha = 1, scale = 1) {
   ctx.shadowOffsetY = 4;
   ctx.fill();
   ctx.shadowColor = "transparent";
-  // emoji
-  ctx.font = `${r * 1.5}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(f.emoji, x, y + r * 0.05);
+  // meyve resmi (yüklendiyse); yüklenene kadar arkadaki renkli top görünür
+  if (f.img && f.img.complete && f.img.naturalWidth > 0) {
+    const d = r * 1.7;
+    ctx.drawImage(f.img, x - d / 2, y - d / 2, d, d);
+  } else {
+    ctx.font = `${r * 1.5}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(f.emoji, x, y + r * 0.05);
+  }
   ctx.restore();
 }
 
@@ -255,11 +269,15 @@ function shade(hex, p) {
 function drawNext() {
   nextCtx.clearRect(0, 0, 80, 80);
   const f = FRUITS[nextTier];
-  const r = Math.min(32, f.r);
-  nextCtx.font = `${r * 1.6}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-  nextCtx.textAlign = "center";
-  nextCtx.textBaseline = "middle";
-  nextCtx.fillText(f.emoji, 40, 42);
+  if (f.img && f.img.complete && f.img.naturalWidth > 0) {
+    nextCtx.drawImage(f.img, 16, 16, 48, 48);
+  } else {
+    const r = Math.min(32, f.r);
+    nextCtx.font = `${r * 1.6}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+    nextCtx.textAlign = "center";
+    nextCtx.textBaseline = "middle";
+    nextCtx.fillText(f.emoji, 40, 42);
+  }
 }
 
 function render() {
