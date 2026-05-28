@@ -238,7 +238,7 @@ function drawFruit(x, y, tier, alpha = 1, scale = 1) {
   ctx.fill();
   ctx.shadowColor = "transparent";
   // emoji
-  ctx.font = `${r * 1.5}px serif`;
+  ctx.font = `${r * 1.5}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(f.emoji, x, y + r * 0.05);
@@ -256,7 +256,7 @@ function drawNext() {
   nextCtx.clearRect(0, 0, 80, 80);
   const f = FRUITS[nextTier];
   const r = Math.min(32, f.r);
-  nextCtx.font = `${r * 1.6}px serif`;
+  nextCtx.font = `${r * 1.6}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
   nextCtx.textAlign = "center";
   nextCtx.textBaseline = "middle";
   nextCtx.fillText(f.emoji, 40, 42);
