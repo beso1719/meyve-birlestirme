@@ -260,7 +260,8 @@ const App = (() => {
     if (!DB.online) { box.innerHTML = `<p class="muted">Arkadaş için bağlantı gerekli.</p>`; return; }
     box.innerHTML = `<p class="muted">Aranıyor…</p>`;
     let results = [];
-    if (q.length === 6 && q === q.toUpperCase()) { const p = await DB.getProfile({ code: q }); if (p) results = [p]; }
+    const code = q.toUpperCase();
+    if (code.length === 6) { const p = await DB.getProfile({ code }); if (p) results = [p]; }
     if (!results.length) results = await DB.searchProfiles(q);
     if (!results.length) { box.innerHTML = `<p class="muted">Kimse bulunamadı.</p>`; return; }
     box.innerHTML = results.map((p) => `<div class="fr-res">
@@ -347,22 +348,18 @@ const App = (() => {
     if (res.error) { alert("Hata: " + res.error); return; }
     activeDuel = { code: res.code, seed: res.seed, role: "creator", mode: selectedMode };
     show("duel");
-    const info = $("#duel-info"); info.classList.remove("hidden");
-    info.innerHTML = `<p><b>${esc(f ? f.nick : "Arkadaşın")}</b> davet edildi · ${getDuelMode(selectedMode).emoji} ${getDuelMode(selectedMode).name}</p>
-      <p class="muted">Kabul edince düelloya başlayabilirsin. Kod: <b class="code">${res.code}</b></p>
-      <button class="btn big" id="duel-play">▶️ Oyna</button>`;
-    $("#duel-play").addEventListener("click", () => playDuel());
+    const m = getDuelMode(selectedMode);
+    enterDuelLobby(`<p><b>${esc(f ? f.nick : "Arkadaşın")}</b> davet edildi · ${m.emoji} ${m.name}</p>
+      <p class="muted">Kabul edince başla — sen başlatınca rakipte de otomatik başlar. Kod: <b class="code">${res.code}</b></p>`);
   }
 
   $("#duel-create").addEventListener("click", async () => {
     const res = await DB.createDuel({ mode: selectedMode });
     if (res.error) { alert("Hata: " + res.error); return; }
     activeDuel = { code: res.code, seed: res.seed, role: "creator", mode: selectedMode };
-    const info = $("#duel-info"); info.classList.remove("hidden");
-    info.innerHTML = `<p>Kodun: <b class="code">${res.code}</b></p>
-      <p class="muted">${getDuelMode(selectedMode).emoji} ${getDuelMode(selectedMode).name} — kodu rakibine yolla.</p>
-      <button class="btn big" id="duel-play">▶️ Oyna</button>`;
-    $("#duel-play").addEventListener("click", () => playDuel());
+    const m = getDuelMode(selectedMode);
+    enterDuelLobby(`<p>Kodun: <b class="code">${res.code}</b></p>
+      <p class="muted">${m.emoji} ${m.name} — kodu rakibine yolla. Sen başlatınca rakipte de otomatik başlar.</p>`);
   });
 
   $("#duel-join").addEventListener("click", () => joinByCode($("#duel-code").value));
@@ -375,18 +372,37 @@ const App = (() => {
     activeDuel = { code, seed: d.seed, role: "challenger", mode: selectedMode, opp: d.creator_nick, oppScore: d.creator_score };
     show("duel");
     const m = getDuelMode(selectedMode);
+    enterDuelLobby(`<p>Rakip: <b>${esc(d.creator_nick || "Anonim")}</b> · ${m.emoji} ${m.name}</p>
+      <p class="muted">${m.desc}</p>`);
+  }
+
+  // Bekleme odası: kanalı aç, rakip varlığını göster, "Oyna" düğmesini bağla.
+  function enterDuelLobby(headerHtml) {
     const info = $("#duel-info"); info.classList.remove("hidden");
-    info.innerHTML = `<p>Rakip: <b>${esc(d.creator_nick || "Anonim")}</b> · ${m.emoji} ${m.name}</p>
-      <p class="muted">${m.desc}</p><button class="btn big" id="duel-play">▶️ Oyna</button>`;
-    $("#duel-play").addEventListener("click", () => playDuel());
+    info.innerHTML = `${headerHtml}
+      <p class="muted" id="duel-presence">⌛ Rakip bekleniyor…</p>
+      <button class="btn big" id="duel-play">▶️ Oyna</button>`;
+    $("#duel-play").addEventListener("click", () => {
+      if (activeDuel && activeDuel.channel) activeDuel.channel.start();
+      playDuel();
+    });
+    openDuelChannel();
+    updateLobbyPresence();
+  }
+  function updateLobbyPresence() {
+    const el = document.getElementById("duel-presence");
+    if (!el || !activeDuel) return;
+    el.innerHTML = activeDuel.oppPresent
+      ? `🟢 <b>Rakip girdi!</b> Başlat — ikinizde de aynı anda başlasın.`
+      : `⌛ Rakip bekleniyor…`;
   }
 
   function playDuel() {
+    if (Game.isRunning()) return;
     targetPassed = false; oppLive = null;
     const mode = getDuelMode(activeDuel.mode);
     const cfg = Object.assign({ mode: "duel", seed: activeDuel.seed, win: mode.win }, modeCfg(mode));
     show("game"); setDuelLive(true); updateDuelLive();
-    openDuelChannel();
     Game.start(cfg, { onStats: updateHud, onEnd: (r) => endGame(r) });
     startLive();
   }
@@ -402,7 +418,15 @@ const App = (() => {
   function openDuelChannel() {
     closeDuelChannel();
     if (!activeDuel) return;
-    activeDuel.channel = DB.openDuelChannel(activeDuel.code, (payload) => { oppLive = payload; updateDuelLive(); });
+    activeDuel.channel = DB.openDuelChannel(activeDuel.code, {
+      onState: (payload) => { oppLive = payload; updateDuelLive(); },
+      onStart: () => { if (!Game.isRunning()) playDuel(); },
+      onPresence: (devices) => {
+        const mine = DB.deviceId();
+        activeDuel.oppPresent = devices.some((d) => d && d !== mine);
+        updateLobbyPresence();
+      },
+    });
   }
   function closeDuelChannel() { if (activeDuel && activeDuel.channel) { try { activeDuel.channel.close(); } catch {} activeDuel.channel = null; } }
   function startLive() {

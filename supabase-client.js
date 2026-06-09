@@ -151,20 +151,33 @@ const DB = (() => {
     return (data || []).filter((p) => p.device !== deviceId());
   }
 
-  // ---- Canlı düello kanalı (Realtime broadcast) ----
-  // onState(payload): rakibin {score, topTier, dead, finalScore} verisini alır.
-  function openDuelChannel(code, onState, onPresence) {
-    if (!online) return { send() {}, close() {} };
-    const ch = client.channel("duel-" + code, { config: { broadcast: { self: false } } });
-    ch.on("broadcast", { event: "state" }, (m) => onState && onState(m.payload));
-    if (onPresence) {
-      ch.on("presence", { event: "sync" }, () => onPresence(Object.keys(ch.presenceState()).length));
-      ch.on("presence", { event: "join" }, () => onPresence(Object.keys(ch.presenceState()).length));
-      ch.on("presence", { event: "leave" }, () => onPresence(Object.keys(ch.presenceState()).length));
+  // ---- Canlı düello kanalı (Realtime broadcast + presence) ----
+  // handlers: { onState(payload), onStart(payload), onPresence(devices[]) }
+  //   onState   : rakibin {score, topTier, dead} canlı verisi
+  //   onStart   : rakip "Oyna" deyince tetiklenir → oyunu otomatik başlat
+  //   onPresence : kanalda bulunan cihaz id listesi (rakibin girip girmediği)
+  function openDuelChannel(code, handlers = {}) {
+    if (!online) return { send() {}, start() {}, close() {} };
+    const ch = client.channel("duel-" + code, {
+      config: { broadcast: { self: false }, presence: { key: deviceId() } },
+    });
+    ch.on("broadcast", { event: "state" }, (m) => handlers.onState && handlers.onState(m.payload));
+    ch.on("broadcast", { event: "start" }, (m) => handlers.onStart && handlers.onStart(m.payload));
+    function presenceDevices() {
+      const st = ch.presenceState(); const out = [];
+      for (const k in st) for (const meta of st[k]) out.push(meta.device);
+      return out;
     }
-    ch.subscribe((status) => { if (status === "SUBSCRIBED" && onPresence) ch.track({ device: deviceId(), at: Date.now() }); });
+    if (handlers.onPresence) {
+      const fire = () => handlers.onPresence(presenceDevices());
+      ch.on("presence", { event: "sync" }, fire);
+      ch.on("presence", { event: "join" }, fire);
+      ch.on("presence", { event: "leave" }, fire);
+    }
+    ch.subscribe((status) => { if (status === "SUBSCRIBED") ch.track({ device: deviceId(), at: Date.now() }); });
     return {
       send(payload) { ch.send({ type: "broadcast", event: "state", payload }); },
+      start(payload) { ch.send({ type: "broadcast", event: "start", payload: payload || {} }); },
       close() { try { client.removeChannel(ch); } catch {} },
     };
   }
