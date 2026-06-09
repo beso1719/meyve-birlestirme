@@ -11,7 +11,7 @@ const App = (() => {
     for (const s of screens) $("#screen-" + s).classList.toggle("hidden", s !== name);
     if (name === "menu") refreshCoins();
   }
-  function back() { stopLive(); closeDuelChannel(); Game.quit(); show("menu"); }
+  function back() { stopLive(); stopOppPoll(); closeDuelChannel(); setCampaignFinish(false); Game.quit(); show("menu"); }
 
   // ---- Takma ad + altın ----
   const nickEl = $("#nick");
@@ -69,17 +69,21 @@ const App = (() => {
   }
 
   function startLevel(lv) {
-    targetPassed = false; show("game"); setDuelLive(false);
+    targetPassed = false; show("game"); setDuelLive(false); setCampaignFinish(false);
     Game.start(Object.assign({ mode: "campaign", level: lv.id }, lv), {
       onStats: updateHud,
-      onTargetReached: () => { targetPassed = true; },
+      onTargetReached: () => { targetPassed = true; setCampaignFinish(true); },
       onEnd: (r) => endGame(r, lv),
     });
   }
   function startEndless() {
-    targetPassed = false; show("game"); setDuelLive(false);
+    targetPassed = false; show("game"); setDuelLive(false); setCampaignFinish(false);
     Game.start({ mode: "endless" }, { onStats: updateHud, onEnd: (r) => endGame(r) });
   }
+
+  // Hedefe ulaşınca beliren "Bölümü Bitir" şeridi (süresiz/hamlesiz leveller için)
+  function setCampaignFinish(on) { $("#campaign-finish").classList.toggle("hidden", !on); }
+  $("#finish-level").addEventListener("click", () => { setCampaignFinish(false); Game.endNow(true, "manual"); });
 
   // ---- HUD ----
   function updateHud(st) {
@@ -400,9 +404,11 @@ const App = (() => {
   function playDuel() {
     if (Game.isRunning()) return;
     targetPassed = false; oppLive = null;
+    activeDuel.finished = false; activeDuel.oppResult = null; activeDuel.myResult = null; activeDuel._rewarded = false;
+    stopOppPoll();
     const mode = getDuelMode(activeDuel.mode);
     const cfg = Object.assign({ mode: "duel", seed: activeDuel.seed, win: mode.win }, modeCfg(mode));
-    show("game"); setDuelLive(true); updateDuelLive();
+    show("game"); setDuelLive(true); setCampaignFinish(false); updateDuelLive();
     Game.start(cfg, { onStats: updateHud, onEnd: (r) => endGame(r) });
     startLive();
   }
@@ -419,8 +425,9 @@ const App = (() => {
     closeDuelChannel();
     if (!activeDuel) return;
     activeDuel.channel = DB.openDuelChannel(activeDuel.code, {
-      onState: (payload) => { oppLive = payload; updateDuelLive(); },
+      onState: (payload) => { oppLive = payload; updateDuelLive(); checkOppDead(); },
       onStart: () => { if (!Game.isRunning()) playDuel(); },
+      onEnd: (payload) => handleOppEnd(payload),
       onPresence: (devices) => {
         const mine = DB.deviceId();
         activeDuel.oppPresent = devices.some((d) => d && d !== mine);
@@ -457,48 +464,124 @@ const App = (() => {
   }
 
   // ---- Düello sonucu ----
+  let oppPollTimer = null;
   function metric(r) { return r.duelMode === "survive" ? Math.round(r.survivedMs / 1000) : r.score; }
+  function stopOppPoll() { if (oppPollTimer) clearInterval(oppPollTimer); oppPollTimer = null; }
+
+  // Rakip canlı veride "öldü" diye işaretlerse, hayatta-kalma modunda ben kazanırım → oyunumu bitir.
+  function checkOppDead() {
+    if (!activeDuel || activeDuel.finished || !Game.isRunning()) return;
+    const mode = getDuelMode(activeDuel.mode);
+    if (mode.win === "survive" && oppLive && oppLive.dead) Game.endNow(true, "opp-dead");
+  }
+
+  // Rakip oyununu bitirdi (kanaldan "end" geldi): skorunu sakla, gerekiyorsa benim oyunumu da bitir.
+  function handleOppEnd(p) {
+    if (!activeDuel || !p) return;
+    activeDuel.oppResult = { metric: p.metric, score: p.score, nick: p.nick, dead: !!p.dead, won: !!p.won };
+    oppLive = Object.assign({}, oppLive, { nick: p.nick, score: p.score, dead: !!p.dead });
+    updateDuelLive();
+    if (Game.isRunning() && !activeDuel.finished) {
+      const mode = getDuelMode(activeDuel.mode);
+      // Hayatta kal: rakip öldüyse ben kazandım. Hedef yarışı: rakip hedefe ulaştıysa ben kaybettim.
+      if (mode.win === "survive" && p.dead) Game.endNow(true, "opp-dead");
+      else if (mode.win === "target" && p.won) Game.endNow(false, "opp-target");
+    } else if (activeDuel.finished) {
+      // Ben zaten bitirmiştim, rakibi bekliyordum → sonucu güncelle.
+      resolveDuelResult();
+    }
+  }
+
   async function endDuel(r) {
     stopLive();
+    activeDuel.finished = true;
+    activeDuel.myResult = r;
     const mode = getDuelMode(activeDuel.mode);
     const myMetric = metric(r);
-    await DB.submitDuel(activeDuel.code, myMetric, activeDuel.role);
+    const iDied = r.reason === "dead";
 
-    // rakip skorunu bul: önce canlı, sonra DB
-    let oppMetric = oppLive && oppLive.dead ? oppLive.score : null;
-    let oppName = (oppLive && oppLive.nick) || activeDuel.opp;
+    await DB.submitDuel(activeDuel.code, myMetric, activeDuel.role);
+    // Rakibe sonucumu yolla: ekranı dursun, skorumu görsün.
+    if (activeDuel.channel) activeDuel.channel.end({
+      nick: DB.getNick() || "Rakip", metric: myMetric, score: r.score, dead: iDied, won: !!r.won,
+    });
+
+    resolveDuelResult();
+  }
+
+  // Sonucu hesapla ve göster. Rakip skoru henüz yoksa "bekleniyor" gösterip kanaldan/DB'den gelince günceller.
+  async function resolveDuelResult() {
+    if (!activeDuel || !activeDuel.finished) return;
+    const mode = getDuelMode(activeDuel.mode);
+    const r = activeDuel.myResult;
+    const myMetric = metric(r);
+
+    let oppMetric = activeDuel.oppResult ? activeDuel.oppResult.metric : null;
+    let oppName = (activeDuel.oppResult && activeDuel.oppResult.nick) || (oppLive && oppLive.nick) || activeDuel.opp;
+    // Hayatta-kalma metriği saniye olduğundan canlı skoru kısayol olarak kullanma.
+    if (oppMetric == null && oppLive && oppLive.dead && mode.win !== "survive") oppMetric = oppLive.score;
     if (oppMetric == null) {
       const d = await DB.getDuel(activeDuel.code);
       if (d) {
-        oppMetric = activeDuel.role === "creator" ? d.challenger_score : d.creator_score;
-        oppName = activeDuel.role === "creator" ? d.challenger_nick : d.creator_nick;
+        const dm = activeDuel.role === "creator" ? d.challenger_score : d.creator_score;
+        if (dm != null) oppMetric = dm;
+        oppName = (activeDuel.role === "creator" ? d.challenger_nick : d.creator_nick) || oppName;
       }
     }
-    closeDuelChannel();
 
-    let body, reward = 0;
-    if (mode.win === "coop") {
-      const total = myMetric + (oppMetric || (oppLive ? oppLive.score : 0));
-      const ok = total >= mode.target;
-      body = ok ? `<b style="color:#2ecc71">Hedefe ulaştınız! 🎉</b><br>Toplam: ${total}/${mode.target}`
-                : `Toplam: ${total}/${mode.target}<br>Birlikte tekrar deneyin!`;
-      reward = ok ? 40 : 10;
-      if (ok) Store.addWin();
-    } else if (oppMetric == null) {
-      body = `Senin sonucun: <b>${myMetric}</b>${mode.win === "survive" ? "s" : ""}<br>Rakip henüz oynamadı. Kod: <b>${activeDuel.code}</b>`;
-      reward = 5;
+    showDuelResult(myMetric, oppMetric, oppName, mode);
+
+    // Rakip hâlâ oynuyorsa: kanaldan "end" gelince güncellenir; ayrıca DB'yi de yokla (yedek).
+    if (oppMetric == null) startOppPoll(); else stopOppPoll();
+  }
+
+  function startOppPoll() {
+    stopOppPoll();
+    let tries = 0;
+    oppPollTimer = setInterval(async () => {
+      if (!activeDuel || !activeDuel.finished || ++tries > 20) { stopOppPoll(); return; }
+      const d = await DB.getDuel(activeDuel.code);
+      if (!d) return;
+      const dm = activeDuel.role === "creator" ? d.challenger_score : d.creator_score;
+      if (dm != null) {
+        stopOppPoll();
+        const nm = activeDuel.role === "creator" ? d.challenger_nick : d.creator_nick;
+        activeDuel.oppResult = { metric: dm, score: dm, nick: nm, dead: true };
+        resolveDuelResult();
+      }
+    }, 2500);
+  }
+
+  function showDuelResult(myMetric, oppMetric, oppName, mode) {
+    let body, reward = 0, won = false;
+    const unit = mode.win === "survive" ? "s" : "";
+    const waiting = oppMetric == null;
+    if (waiting) {
+      // Rakip henüz bitirmedi: sonucu beklet, ödülü rakip belli olunca ver.
+      body = `Senin sonucun: <b>${myMetric}</b>${unit}<br><span class="muted">⌛ Rakip bekleniyor…</span><br>Kod: <b>${activeDuel.code}</b>`;
+    } else if (mode.win === "coop") {
+      const total = myMetric + oppMetric;
+      won = total >= mode.target;
+      body = won ? `<b style="color:#2ecc71">Hedefe ulaştınız! 🎉</b><br>Toplam: ${total}/${mode.target}`
+                 : `Toplam: ${total}/${mode.target}<br>Birlikte tekrar deneyin!`;
+      reward = won ? 40 : 10;
     } else {
-      const unit = mode.win === "survive" ? "s" : "";
       const n = esc(oppName || "Rakip");
-      if (myMetric > oppMetric) { body = `<b style="color:#2ecc71">Kazandın! 🎉</b><br>Sen: ${myMetric}${unit} · ${n}: ${oppMetric}${unit}`; reward = 50; Store.addWin(); }
+      if (myMetric > oppMetric) { body = `<b style="color:#2ecc71">Kazandın! 🎉</b><br>Sen: ${myMetric}${unit} · ${n}: ${oppMetric}${unit}`; reward = 50; won = true; }
       else if (myMetric < oppMetric) { body = `<b style="color:#e74c3c">Kaybettin 😢</b><br>Sen: ${myMetric}${unit} · ${n}: ${oppMetric}${unit}`; reward = 10; }
       else { body = `<b>Berabere!</b><br>İkiniz: ${myMetric}${unit}`; reward = 20; }
     }
-    if (reward > 0) { Store.addCoins(reward); Sound.play("coin"); body += `<br>🪙 +${reward} altın`; }
+    // Ödülü yalnızca ilk kez (rakip belli olunca) ver — güncelleme tekrar vermesin.
+    if (!waiting && !activeDuel._rewarded) {
+      activeDuel._rewarded = true;
+      if (won) Store.addWin();
+      if (reward > 0) { Store.addCoins(reward); Sound.play("coin"); }
+    }
+    if (!waiting && reward > 0) body += `<br>🪙 +${reward} altın`;
 
     openResult(`${mode.emoji} ${mode.name}`, body, [
-      { t: "Tekrar", fn: () => { closeResult(); playDuel(); } },
-      { t: "Menü", cls: "ghost", fn: () => { closeResult(); activeDuel = null; show("menu"); } },
+      { t: "Tekrar", fn: () => { closeResult(); activeDuel._rewarded = false; playDuel(); } },
+      { t: "Menü", cls: "ghost", fn: () => { closeResult(); stopOppPoll(); closeDuelChannel(); activeDuel = null; show("menu"); } },
     ]);
   }
 

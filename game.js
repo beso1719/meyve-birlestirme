@@ -315,6 +315,8 @@ const Game = (() => {
   }
 
   function stop() { running = false; cancelAnimationFrame(rafId); }
+  // Dışarıdan oyunu bitir (kampanya "Bölümü Bitir" düğmesi / düelloda rakip bitince)
+  function endNow(won, reason = "manual") { if (running) finish(!!won, reason); }
   function quit() { stop(); paused = false; if (world) for (const b of Composite.allBodies(world)) if (b.label === "fruit" || b.label === "bomb") World.remove(world, b); }
 
   function pause() { if (!running || paused) return; paused = true; cancelAnimationFrame(rafId); }
@@ -342,5 +344,5 @@ const Game = (() => {
   window.addEventListener("keydown", (e) => { if (e.code === "Space") { e.preventDefault(); drop(); } });
   window.addEventListener("resize", () => { if (running) { fitCanvas(); rebuildWalls(); } });
 
-  return { start, stop, quit, pause, resume, isRunning, getLiveState };
+  return { start, stop, quit, pause, resume, isRunning, getLiveState, endNow };
 })();

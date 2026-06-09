@@ -157,12 +157,13 @@ const DB = (() => {
   //   onStart   : rakip "Oyna" deyince tetiklenir → oyunu otomatik başlat
   //   onPresence : kanalda bulunan cihaz id listesi (rakibin girip girmediği)
   function openDuelChannel(code, handlers = {}) {
-    if (!online) return { send() {}, start() {}, close() {} };
+    if (!online) return { send() {}, start() {}, end() {}, close() {} };
     const ch = client.channel("duel-" + code, {
       config: { broadcast: { self: false }, presence: { key: deviceId() } },
     });
     ch.on("broadcast", { event: "state" }, (m) => handlers.onState && handlers.onState(m.payload));
     ch.on("broadcast", { event: "start" }, (m) => handlers.onStart && handlers.onStart(m.payload));
+    ch.on("broadcast", { event: "end" }, (m) => handlers.onEnd && handlers.onEnd(m.payload));
     function presenceDevices() {
       const st = ch.presenceState(); const out = [];
       for (const k in st) for (const meta of st[k]) out.push(meta.device);
@@ -178,6 +179,7 @@ const DB = (() => {
     return {
       send(payload) { ch.send({ type: "broadcast", event: "state", payload }); },
       start(payload) { ch.send({ type: "broadcast", event: "start", payload: payload || {} }); },
+      end(payload) { ch.send({ type: "broadcast", event: "end", payload: payload || {} }); },
       close() { try { client.removeChannel(ch); } catch {} },
     };
   }
