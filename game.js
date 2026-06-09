@@ -1,344 +1,319 @@
-// 🍉 Meyve Birleştirme — Suika tarzı oyun (matter.js)
+// 🍉 Meyve Birleştirme — motor (matter.js). Config + callback ile çalışır.
 const { Engine, World, Bodies, Body, Composite, Events } = Matter;
 
-// ---- Meyve tanımları (küçükten büyüğe) ----
-const FRUITS = [
-  { emoji: "🍒", code: "1f352", r: 16,  color: "#e74c3c" },
-  { emoji: "🍓", code: "1f353", r: 22,  color: "#e84393" },
-  { emoji: "🍇", code: "1f347", r: 29,  color: "#9b59b6" },
-  { emoji: "🍊", code: "1f34a", r: 37,  color: "#f39c12" },
-  { emoji: "🍎", code: "1f34e", r: 45,  color: "#e74c3c" },
-  { emoji: "🍐", code: "1f350", r: 54,  color: "#a3cb38" },
-  { emoji: "🍑", code: "1f351", r: 63,  color: "#ff9a8b" },
-  { emoji: "🥭", code: "1f96d", r: 73,  color: "#f6b93b" },
-  { emoji: "🍍", code: "1f34d", r: 84,  color: "#f1c40f" },
-  { emoji: "🍈", code: "1f348", r: 96,  color: "#badc58" },
-  { emoji: "🍉", code: "1f349", r: 110, color: "#2ecc71" },
-];
-const MAX_TIER = FRUITS.length - 1;
-
-// Emoji resimlerini önceden yükle (her telefonda aynı görünür — Twemoji).
-// Canvas bazı telefonlarda renkli emoji çizemediği için resim kullanıyoruz.
-for (const f of FRUITS) {
-  const img = new Image();
-  img.crossOrigin = "anonymous";
-  img.src = `https://cdn.jsdelivr.net/gh/jdecked/twemoji@15.1.0/assets/72x72/${f.code}.png`;
-  f.img = img;
-}
-const SPAWN_MAX_TIER = 4; // sadece ilk 5 meyve düşürülür
-
-// ---- Canvas / boyut ----
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-const jar = canvas.parentElement;
-let W = jar.clientWidth, H = jar.clientHeight;
-
-// Meyveler kavanoz genişliğine göre ölçeklenir → her ekranda aynı oranda
-// meyve sığar. Değer küçüldükçe meyveler küçülür ve oyun daha uzun sürer.
-let S = 1;
-let DROP_Y = 50;          // düşürme yüksekliği
-let DEATH_Y = 90;         // bu çizgi üstünde kalırsa oyun biter
-
-function fitCanvas() {
-  W = jar.clientWidth;
-  H = jar.clientHeight;
-  canvas.width = W;
-  canvas.height = H;
-  S = W / 450;            // referans genişlik 450px → meyveler buna göre küçülür
-  DROP_Y = H * 0.09;
-  DEATH_Y = H * 0.15;
-}
-fitCanvas();
-
-const WALL = 8;
-
-// ---- Fizik motoru ----
-const engine = Engine.create();
-engine.gravity.y = 1.4;
-const world = engine.world;
-
-function makeWalls() {
-  const opts = { isStatic: true, render: { visible: false }, friction: 0.4 };
-  return [
-    Bodies.rectangle(W / 2, H + 30, W, 60, opts),          // zemin
-    Bodies.rectangle(-WALL / 2, H / 2, WALL, H * 2, opts),  // sol
-    Bodies.rectangle(W + WALL / 2, H / 2, WALL, H * 2, opts),// sağ
-  ];
-}
-let walls = makeWalls();
-World.add(world, walls);
-
-// ---- Oyun durumu ----
-let score = 0;
-let best = +localStorage.getItem("meyve_best") || 0;
-let current = null;     // düşürülmeyi bekleyen meyve
-let nextTier = randTier();
-let canDrop = true;
-let gameOver = false;
-let dropX = W / 2;
-const effects = [];     // birleşme efektleri
-
-const scoreEl = document.getElementById("score");
-const bestEl = document.getElementById("best");
-const nextCanvas = document.getElementById("next");
-const nextCtx = nextCanvas.getContext("2d");
-bestEl.textContent = best;
-
-function randTier() {
-  return Math.floor(Math.random() * (SPAWN_MAX_TIER + 1));
+// Deterministik RNG (düello için aynı seed = aynı meyve sırası)
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
-function makeFruit(tier, x, y, isStatic = false) {
-  const f = FRUITS[tier];
-  const r = f.r * S;
-  const body = Bodies.circle(x, y, r, {
-    isStatic,
-    restitution: 0.2,
-    friction: 0.6,
-    density: 0.001,
-    label: "fruit",
-  });
-  body.tier = tier;
-  body.radius = r;
-  body.bornAt = performance.now();
-  body.merging = false;
-  return body;
-}
+const Game = (() => {
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const jar = canvas.parentElement;
+  const nextCanvas = document.getElementById("next");
+  const nextCtx = nextCanvas.getContext("2d");
 
-function spawnCurrent() {
-  const tier = nextTier;
-  nextTier = randTier();
-  current = makeFruit(tier, clampX(dropX, tier), DROP_Y, true);
-  World.add(world, current);
-  canDrop = true;
-  drawNext();
-}
+  let W, H, S, DROP_Y, DEATH_Y, deathY0;
+  const WALL = 8;
+  let wallInset = 0; // dar kavanoz için iç duvar
 
-function clampX(x, tier) {
-  const r = FRUITS[tier].r * S;
-  return Math.max(r + WALL, Math.min(W - r - WALL, x));
-}
+  let engine, world, walls = [];
+  let cfg, cbs, rng;
+  let score, current, nextTier, nextIsBomb, curIsBomb;
+  let canDrop, running, dropCount, timeLeft;
+  let dropX, overTimer, last, rafId;
+  const effects = [];
 
-function drop() {
-  if (!canDrop || !current || gameOver) return;
-  Body.setStatic(current, false);
-  current.bornAt = performance.now();
-  current = null;
-  canDrop = false;
-  setTimeout(() => { if (!gameOver) spawnCurrent(); }, 520);
-}
+  function fitCanvas() {
+    W = jar.clientWidth; H = jar.clientHeight;
+    canvas.width = W; canvas.height = H;
+    S = (W * cfg.jarWidthRatio) / 450;
+    wallInset = (W * (1 - cfg.jarWidthRatio)) / 2;
+    DROP_Y = H * 0.09;
+    deathY0 = H * 0.15;
+    DEATH_Y = deathY0;
+  }
 
-// ---- Birleşme ----
-Events.on(engine, "collisionStart", (e) => {
-  for (const pair of e.pairs) {
-    const a = pair.bodyA, b = pair.bodyB;
-    if (a.label !== "fruit" || b.label !== "fruit") continue;
-    if (a.merging || b.merging) continue;
-    if (a.tier !== b.tier) continue;
-    if (a.tier >= MAX_TIER) {          // karpuz + karpuz → ikisi de yok
+  function makeWalls() {
+    const opts = { isStatic: true, render: { visible: false }, friction: 0.4 };
+    return [
+      Bodies.rectangle(W / 2, H + 30, W, 60, opts),
+      Bodies.rectangle(wallInset - WALL / 2, H / 2, WALL, H * 2, opts),
+      Bodies.rectangle(W - wallInset + WALL / 2, H / 2, WALL, H * 2, opts),
+    ];
+  }
+
+  function rebuildWalls() {
+    Composite.remove(world, walls);
+    walls = makeWalls();
+    World.add(world, walls);
+  }
+
+  function randTier() {
+    const tiers = cfg.spawnTiers || range(0, cfg.spawnMaxTier);
+    return tiers[Math.floor(rng() * tiers.length)];
+  }
+  function range(a, b) { const o = []; for (let i = a; i <= b; i++) o.push(i); return o; }
+
+  function clampX(x, tier, bomb) {
+    const r = (bomb ? SPECIAL.bomb.r : FRUITS[tier].r) * S;
+    return Math.max(r + wallInset + WALL, Math.min(W - wallInset - r - WALL, x));
+  }
+
+  function makeFruit(tier, x, y, isStatic = false) {
+    const f = FRUITS[tier];
+    const r = f.r * S;
+    const body = Bodies.circle(x, y, r, {
+      isStatic, restitution: cfg.restitution, friction: cfg.friction,
+      density: 0.001, label: "fruit",
+    });
+    body.tier = tier; body.radius = r; body.bornAt = performance.now(); body.merging = false;
+    return body;
+  }
+  function makeBomb(x, y, isStatic = false) {
+    const r = SPECIAL.bomb.r * S;
+    const body = Bodies.circle(x, y, r, {
+      isStatic, restitution: 0.2, friction: cfg.friction, density: 0.001, label: "bomb",
+    });
+    body.radius = r; body.bornAt = performance.now();
+    return body;
+  }
+
+  function spawnCurrent() {
+    curIsBomb = nextIsBomb;
+    if (curIsBomb) {
+      current = makeBomb(clampX(dropX, 0, true), DROP_Y, true);
+    } else {
+      current = makeFruit(nextTier, clampX(dropX, nextTier), DROP_Y, true);
+    }
+    World.add(world, current);
+    // sıradakini hazırla
+    nextIsBomb = cfg.bombChance > 0 && rng() < cfg.bombChance;
+    nextTier = randTier();
+    canDrop = true;
+    drawNext();
+  }
+
+  function drop() {
+    if (!canDrop || !current || !running) return;
+    if (curIsBomb) {
+      explode(current.position.x, current.position.y);
+      World.remove(world, current);
+      current = null; canDrop = false;
+    } else {
+      Body.setStatic(current, false);
+      current.bornAt = performance.now();
+      current = null; canDrop = false;
+    }
+    dropCount++;
+    if (cbs.onStats) cbs.onStats(stats());
+    setTimeout(() => { if (running) spawnCurrent(); }, 480);
+    if (cfg.maxDrops && dropCount >= cfg.maxDrops) {
+      // son hamleden sonra meyvelerin oturmasını bekle
+      setTimeout(() => { if (running) finish(score >= (cfg.target || 0)); }, 4000);
+    }
+  }
+
+  function explode(x, y) {
+    const R = 90 * S;
+    for (const b of Composite.allBodies(world)) {
+      if (b.label !== "fruit") continue;
+      const dx = b.position.x - x, dy = b.position.y - y;
+      if (Math.hypot(dx, dy) < R) {
+        addEffect(b.position.x, b.position.y, b.tier);
+        World.remove(world, b);
+        addScore(5);
+      }
+    }
+  }
+
+  function onCollision(e) {
+    for (const pair of e.pairs) {
+      const a = pair.bodyA, b = pair.bodyB;
+      if (a.label !== "fruit" || b.label !== "fruit") continue;
+      if (a.merging || b.merging || a.tier !== b.tier) continue;
       a.merging = b.merging = true;
-      addEffect((a.position.x + b.position.x) / 2, (a.position.y + b.position.y) / 2, MAX_TIER);
+      const nx = (a.position.x + b.position.x) / 2;
+      const ny = (a.position.y + b.position.y) / 2;
       World.remove(world, a); World.remove(world, b);
-      addScore(100);
-      continue;
-    }
-    a.merging = b.merging = true;
-    const nx = (a.position.x + b.position.x) / 2;
-    const ny = (a.position.y + b.position.y) / 2;
-    const newTier = a.tier + 1;
-    World.remove(world, a);
-    World.remove(world, b);
-    const nf = makeFruit(newTier, nx, ny, false);
-    World.add(world, nf);
-    addEffect(nx, ny, newTier);
-    addScore((newTier + 1) * 2);
-  }
-});
-
-function addScore(p) {
-  score += p;
-  scoreEl.textContent = score;
-  if (score > best) {
-    best = score;
-    bestEl.textContent = best;
-    localStorage.setItem("meyve_best", best);
-  }
-}
-
-function addEffect(x, y, tier) {
-  effects.push({ x, y, r: FRUITS[tier].r * S, t: 0 });
-}
-
-// ---- Kontroller ----
-function pointerX(e) {
-  const rect = canvas.getBoundingClientRect();
-  const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
-  return cx * (W / rect.width);
-}
-canvas.addEventListener("mousemove", (e) => { dropX = pointerX(e); });
-canvas.addEventListener("mousedown", drop);
-canvas.addEventListener("touchmove", (e) => { dropX = pointerX(e); e.preventDefault(); }, { passive: false });
-canvas.addEventListener("touchstart", (e) => { dropX = pointerX(e); }, { passive: true });
-canvas.addEventListener("touchend", drop);
-window.addEventListener("keydown", (e) => { if (e.code === "Space") { e.preventDefault(); drop(); } });
-
-document.getElementById("restart").addEventListener("click", restart);
-
-window.addEventListener("resize", () => {
-  fitCanvas();
-  Composite.remove(world, walls);
-  walls = makeWalls();
-  World.add(world, walls);
-});
-
-// ---- Oyun bitti ----
-let overTimer = 0;
-function checkGameOver(dt) {
-  if (gameOver) return;
-  let danger = false;
-  for (const body of Composite.allBodies(world)) {
-    if (body.label !== "fruit" || body === current) continue;
-    if (performance.now() - body.bornAt < 1500) continue; // yeni düşeni sayma
-    if (body.position.y - body.radius < DEATH_Y && Math.abs(body.velocity.y) < 0.4) {
-      danger = true;
-      break;
+      if (a.tier >= MAX_TIER) {
+        addEffect(nx, ny, MAX_TIER); addScore(100);
+      } else {
+        const nt = a.tier + 1;
+        World.add(world, makeFruit(nt, nx, ny, false));
+        addEffect(nx, ny, nt); addScore((nt + 1) * 2);
+      }
     }
   }
-  overTimer = danger ? overTimer + dt : 0;
-  if (overTimer > 1.6) endGame();
-}
 
-function endGame() {
-  gameOver = true;
-  document.getElementById("final-score").textContent = score;
-  document.getElementById("final-best").textContent = best;
-  document.getElementById("gameover").classList.remove("hidden");
-}
-
-function restart() {
-  for (const body of Composite.allBodies(world)) {
-    if (body.label === "fruit") World.remove(world, body);
+  function addScore(p) {
+    score += p;
+    if (cbs.onStats) cbs.onStats(stats());
+    if (cfg.target && score >= cfg.target && cfg.mode === "campaign") {
+      // hedefe ulaşıldı ama oyuncu devam edip skoru artırabilsin diye bitirmiyoruz;
+      // sadece "geçti" işareti veriyoruz.
+      cbs.onTargetReached && cbs.onTargetReached();
+    }
   }
-  score = 0; scoreEl.textContent = 0;
-  overTimer = 0; gameOver = false;
-  current = null; canDrop = true;
-  nextTier = randTier();
-  document.getElementById("gameover").classList.add("hidden");
-  spawnCurrent();
-}
 
-// ---- Çizim ----
-function drawFruit(x, y, tier, alpha = 1, scale = 1) {
-  const f = FRUITS[tier];
-  const r = f.r * scale * S;
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  // gölgeli renkli daire
-  const grad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.2, x, y, r);
-  grad.addColorStop(0, "#ffffff88");
-  grad.addColorStop(0.25, f.color);
-  grad.addColorStop(1, shade(f.color, -25));
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = grad;
-  ctx.shadowColor = "rgba(0,0,0,.25)";
-  ctx.shadowBlur = 8;
-  ctx.shadowOffsetY = 4;
-  ctx.fill();
-  ctx.shadowColor = "transparent";
-  // meyve resmi (yüklendiyse); yüklenene kadar arkadaki renkli top görünür
-  if (f.img && f.img.complete && f.img.naturalWidth > 0) {
-    const d = r * 1.7;
-    ctx.drawImage(f.img, x - d / 2, y - d / 2, d, d);
-  } else {
-    ctx.font = `${r * 1.5}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(f.emoji, x, y + r * 0.05);
+  function addEffect(x, y, tier) { effects.push({ x, y, r: FRUITS[tier].r * S, t: 0 }); }
+
+  function stats() {
+    return { score, dropsLeft: cfg.maxDrops ? Math.max(0, cfg.maxDrops - dropCount) : null,
+             timeLeft: cfg.timeLimit ? Math.ceil(timeLeft) : null,
+             target: cfg.target, passed: cfg.target ? score >= cfg.target : null };
   }
-  ctx.restore();
-}
 
-function shade(hex, p) {
-  const n = parseInt(hex.slice(1), 16);
-  let r = (n >> 16) + p, g = ((n >> 8) & 255) + p, b = (n & 255) + p;
-  r = Math.max(0, Math.min(255, r)); g = Math.max(0, Math.min(255, g)); b = Math.max(0, Math.min(255, b));
-  return `rgb(${r},${g},${b})`;
-}
-
-function drawNext() {
-  nextCtx.clearRect(0, 0, 80, 80);
-  const f = FRUITS[nextTier];
-  if (f.img && f.img.complete && f.img.naturalWidth > 0) {
-    nextCtx.drawImage(f.img, 16, 16, 48, 48);
-  } else {
-    const r = Math.min(32, f.r);
-    nextCtx.font = `${r * 1.6}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
-    nextCtx.textAlign = "center";
-    nextCtx.textBaseline = "middle";
-    nextCtx.fillText(f.emoji, 40, 42);
+  // ---- Bitiş kontrolü ----
+  function checkGameOver(dt) {
+    if (!running) return;
+    let danger = false;
+    for (const body of Composite.allBodies(world)) {
+      if ((body.label !== "fruit" && body.label !== "bomb") || body === current) continue;
+      if (performance.now() - body.bornAt < 1500) continue;
+      if (body.position.y - body.radius < DEATH_Y && Math.abs(body.velocity.y) < 0.4) { danger = true; break; }
+    }
+    overTimer = danger ? overTimer + dt : 0;
+    if (overTimer > 1.6) finish(cfg.target ? score >= cfg.target : false);
   }
-}
 
-function render() {
-  ctx.clearRect(0, 0, W, H);
+  function finish(won) {
+    if (!running) return;
+    running = false;
+    cancelAnimationFrame(rafId);
+    cbs.onEnd && cbs.onEnd({ score: Math.round(score), won, mode: cfg.mode, level: cfg.level });
+  }
 
-  // ölüm çizgisi
-  ctx.strokeStyle = "rgba(231,76,60,.7)";
-  ctx.lineWidth = 2;
-  ctx.setLineDash([8, 6]);
-  ctx.beginPath();
-  ctx.moveTo(0, DEATH_Y);
-  ctx.lineTo(W, DEATH_Y);
-  ctx.stroke();
-  ctx.setLineDash([]);
-
-  // meyveler
-  for (const body of Composite.allBodies(world)) {
-    if (body.label !== "fruit") continue;
-    ctx.save();
-    ctx.translate(body.position.x, body.position.y);
-    ctx.rotate(body.angle);
-    ctx.translate(-body.position.x, -body.position.y);
+  // ---- Çizim ----
+  function drawBody(body) {
+    if (body.label === "bomb") { drawSprite(SPECIAL.bomb, body.position.x, body.position.y, body.radius); return; }
     drawFruit(body.position.x, body.position.y, body.tier);
-    ctx.restore();
   }
-
-  // bekleyen meyve
-  if (current) drawFruit(current.position.x, current.position.y, current.tier);
-
-  // birleşme efektleri (halka)
-  for (let i = effects.length - 1; i >= 0; i--) {
-    const ef = effects[i];
-    ef.t += 0.08;
-    const a = 1 - ef.t;
-    if (a <= 0) { effects.splice(i, 1); continue; }
+  function drawSprite(s, x, y, r) {
     ctx.save();
-    ctx.globalAlpha = a;
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(ef.x, ef.y, ef.r * (1 + ef.t), 0, Math.PI * 2);
-    ctx.stroke();
+    if (s.img && s.img.complete && s.img.naturalWidth > 0) {
+      const d = r * 2; ctx.drawImage(s.img, x - d / 2, y - d / 2, d, d);
+    } else {
+      ctx.font = `${r * 1.6}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(s.emoji, x, y);
+    }
     ctx.restore();
   }
-}
-
-// ---- Ana döngü ----
-let last = performance.now();
-function loop(now) {
-  const dt = Math.min(0.05, (now - last) / 1000);
-  last = now;
-
-  if (current && canDrop) {
-    Body.setPosition(current, { x: clampX(dropX, current.tier), y: DROP_Y });
+  function drawFruit(x, y, tier, alpha = 1) {
+    const f = FRUITS[tier]; const r = f.r * S;
+    ctx.save(); ctx.globalAlpha = alpha;
+    const grad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.2, x, y, r);
+    grad.addColorStop(0, "#ffffff88"); grad.addColorStop(0.25, f.color); grad.addColorStop(1, shade(f.color, -25));
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = grad;
+    ctx.shadowColor = "rgba(0,0,0,.25)"; ctx.shadowBlur = 8; ctx.shadowOffsetY = 4; ctx.fill();
+    ctx.shadowColor = "transparent";
+    if (f.img && f.img.complete && f.img.naturalWidth > 0) {
+      const d = r * 1.7; ctx.drawImage(f.img, x - d / 2, y - d / 2, d, d);
+    } else {
+      ctx.font = `${r * 1.5}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(f.emoji, x, y + r * 0.05);
+    }
+    ctx.restore();
+  }
+  function shade(hex, p) {
+    const n = parseInt(hex.slice(1), 16);
+    let r = (n >> 16) + p, g = ((n >> 8) & 255) + p, b = (n & 255) + p;
+    r = Math.max(0, Math.min(255, r)); g = Math.max(0, Math.min(255, g)); b = Math.max(0, Math.min(255, b));
+    return `rgb(${r},${g},${b})`;
+  }
+  function drawNext() {
+    nextCtx.clearRect(0, 0, 80, 80);
+    const s = nextIsBomb ? SPECIAL.bomb : FRUITS[nextTier];
+    if (s.img && s.img.complete && s.img.naturalWidth > 0) nextCtx.drawImage(s.img, 16, 16, 48, 48);
+    else { nextCtx.font = "34px sans-serif"; nextCtx.textAlign = "center"; nextCtx.textBaseline = "middle"; nextCtx.fillText(s.emoji, 40, 42); }
   }
 
-  Engine.update(engine, 1000 / 60);
-  checkGameOver(dt);
-  render();
-  requestAnimationFrame(loop);
-}
+  function render() {
+    ctx.clearRect(0, 0, W, H);
+    // dar kavanoz duvarları
+    if (wallInset > 1) {
+      ctx.fillStyle = "rgba(0,0,0,.06)";
+      ctx.fillRect(0, 0, wallInset, H); ctx.fillRect(W - wallInset, 0, wallInset, H);
+    }
+    // ölüm çizgisi
+    ctx.strokeStyle = "rgba(231,76,60,.7)"; ctx.lineWidth = 2; ctx.setLineDash([8, 6]);
+    ctx.beginPath(); ctx.moveTo(wallInset, DEATH_Y); ctx.lineTo(W - wallInset, DEATH_Y); ctx.stroke();
+    ctx.setLineDash([]);
+    for (const body of Composite.allBodies(world)) {
+      if (body.label !== "fruit" && body.label !== "bomb") continue;
+      ctx.save(); ctx.translate(body.position.x, body.position.y); ctx.rotate(body.angle);
+      ctx.translate(-body.position.x, -body.position.y); drawBody(body); ctx.restore();
+    }
+    if (current) drawBody(current);
+    for (let i = effects.length - 1; i >= 0; i--) {
+      const ef = effects[i]; ef.t += 0.08; const a = 1 - ef.t;
+      if (a <= 0) { effects.splice(i, 1); continue; }
+      ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = "#fff"; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(ef.x, ef.y, ef.r * (1 + ef.t), 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+    }
+  }
 
-spawnCurrent();
-requestAnimationFrame(loop);
+  function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (current && canDrop) {
+      const b = curIsBomb;
+      Body.setPosition(current, { x: clampX(dropX, b ? 0 : current.tier, b), y: DROP_Y });
+    }
+    if (cfg.timeLimit) {
+      timeLeft -= dt;
+      if (timeLeft <= 0) { timeLeft = 0; finish(cfg.target ? score >= cfg.target : false); return; }
+    }
+    if (cfg.risingDeath) { DEATH_Y = Math.min(H * 0.5, DEATH_Y + cfg.risingDeath * dt); }
+    Engine.update(engine, 1000 / 60);
+    checkGameOver(dt);
+    render();
+    rafId = requestAnimationFrame(loop);
+  }
+
+  // ---- Dış API ----
+  function start(config, callbacks) {
+    cfg = Object.assign({}, BASE_CFG, config);
+    cbs = callbacks || {};
+    rng = mulberry32(cfg.seed != null ? cfg.seed : (Math.random() * 2 ** 31) | 0);
+
+    if (engine) { World.clear(world, false); Engine.clear(engine); }
+    engine = Engine.create(); engine.gravity.y = cfg.gravity; world = engine.world;
+    Events.on(engine, "collisionStart", onCollision);
+
+    fitCanvas();
+    walls = makeWalls(); World.add(world, walls);
+
+    score = 0; dropCount = 0; overTimer = 0; dropX = W / 2;
+    timeLeft = cfg.timeLimit || 0; running = true; canDrop = true;
+    nextIsBomb = cfg.bombChance > 0 && rng() < cfg.bombChance;
+    nextTier = randTier();
+    spawnCurrent();
+    if (cbs.onStats) cbs.onStats(stats());
+    last = performance.now();
+    rafId = requestAnimationFrame(loop);
+  }
+
+  function stop() { running = false; cancelAnimationFrame(rafId); }
+  function quit() { stop(); if (world) for (const b of Composite.allBodies(world)) if (b.label === "fruit" || b.label === "bomb") World.remove(world, b); }
+
+  // kontroller
+  function pointerX(e) {
+    const rect = canvas.getBoundingClientRect();
+    const cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    return cx * (W / rect.width);
+  }
+  canvas.addEventListener("mousemove", (e) => { dropX = pointerX(e); });
+  canvas.addEventListener("mousedown", drop);
+  canvas.addEventListener("touchmove", (e) => { dropX = pointerX(e); e.preventDefault(); }, { passive: false });
+  canvas.addEventListener("touchstart", (e) => { dropX = pointerX(e); }, { passive: true });
+  canvas.addEventListener("touchend", drop);
+  window.addEventListener("keydown", (e) => { if (e.code === "Space") { e.preventDefault(); drop(); } });
+  window.addEventListener("resize", () => { if (running) { fitCanvas(); rebuildWalls(); } });
+
+  return { start, stop, quit };
+})();

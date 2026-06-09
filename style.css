@@ -10,15 +10,111 @@
 body {
   font-family: "Segoe UI", system-ui, sans-serif;
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   background: linear-gradient(160deg, #ffe7a8 0%, #ffb88c 45%, #ff8fa3 100%);
   color: #4a2c00;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  overflow: hidden;
 }
+
+#app { min-height: 100vh; }
+
+.screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 18px 16px 28px;
+  gap: 16px;
+}
+.screen.hidden { display: none; }
+#screen-game { justify-content: center; }
+
+.hidden { display: none !important; }
+
+/* Ana menü */
+.big-title {
+  font-size: clamp(32px, 9vw, 52px);
+  font-weight: 900;
+  text-align: center;
+  line-height: 1.05;
+  margin-top: 6vh;
+  text-shadow: 0 3px 0 rgba(255,255,255,.5);
+}
+.nick-row {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.nick-row input, .join-row input, #duel-code {
+  font-size: 18px; font-weight: 700; text-align: center;
+  padding: 10px 16px; border: 3px solid rgba(255,255,255,.8);
+  border-radius: 14px; background: rgba(255,255,255,.7); color: #4a2c00;
+  outline: none; width: 220px;
+}
+.nick-row input.shake { animation: shake .4s; border-color: #e74c3c; }
+@keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-7px)} 75%{transform:translateX(7px)} }
+
+.menu-btns { display: flex; flex-direction: column; gap: 12px; width: min(86vw, 320px); margin-top: 8px; }
+.btn.big { width: 100%; padding: 16px; font-size: 19px; }
+.btn.ghost { background: rgba(255,255,255,.7); color: #c0392b; box-shadow: 0 6px 16px rgba(180,90,40,.2); }
+.conn { font-size: 13px; font-weight: 600; opacity: .7; margin-top: auto; }
+
+/* Üst gezinme */
+.topnav { display: flex; align-items: center; justify-content: space-between; width: min(92vw, 480px); }
+.topnav h2 { font-size: 22px; font-weight: 800; }
+.topnav span { width: 56px; }
+.back {
+  background: rgba(255,255,255,.7); border: none; border-radius: 12px;
+  font-size: 16px; font-weight: 800; color: #c0392b; padding: 8px 14px; cursor: pointer;
+}
+.back.small { padding: 6px 12px; font-size: 20px; }
+
+/* Level grid */
+.level-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+  width: min(92vw, 480px); overflow-y: auto;
+}
+.level-card {
+  position: relative; background: rgba(255,255,255,.72); border: none; border-radius: 18px;
+  padding: 16px 12px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  cursor: pointer; box-shadow: 0 6px 16px rgba(180,90,40,.2); transition: transform .12s;
+}
+.level-card:active { transform: scale(.97); }
+.level-card.locked { opacity: .55; cursor: not-allowed; }
+.level-card.done { box-shadow: 0 0 0 3px #2ecc71 inset, 0 6px 16px rgba(46,204,113,.3); }
+.lv-emoji { font-size: 34px; }
+.lv-name { font-weight: 800; font-size: 15px; text-align: center; }
+.lv-target { font-size: 12px; opacity: .65; font-weight: 600; }
+.lv-check { position: absolute; top: 8px; right: 10px; color: #2ecc71; font-weight: 900; }
+
+/* HUD */
+.hud { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; flex: 1; }
+.hud-item { background: rgba(255,255,255,.7); border-radius: 10px; padding: 5px 10px; font-weight: 800; font-size: 14px; }
+.hud-item.ok { background: #2ecc71; color: #fff; }
+.hud-item.warn { background: #e74c3c; color: #fff; }
+.topbar .back.small { margin-right: auto; }
+
+/* Düello */
+.duel-box { display: flex; flex-direction: column; align-items: center; gap: 14px; width: min(86vw, 320px); margin-top: 8px; }
+.muted { font-size: 13px; opacity: .7; font-weight: 600; text-align: center; }
+.center { text-align: center; }
+.or { font-weight: 800; opacity: .5; }
+.join-row { display: flex; gap: 8px; }
+.join-row input { width: 130px; text-transform: uppercase; letter-spacing: 3px; }
+.duel-info { background: rgba(255,255,255,.72); border-radius: 16px; padding: 16px; text-align: center; width: 100%; }
+.duel-info .code { font-size: 28px; letter-spacing: 4px; color: #c0392b; }
+
+/* Skor tablosu */
+.tabs { display: flex; gap: 8px; }
+.tab { background: rgba(255,255,255,.6); border: none; border-radius: 12px; padding: 8px 14px; font-weight: 700; cursor: pointer; color: #4a2c00; }
+.tab.active { background: linear-gradient(160deg, #ff7a59, #ff4d6d); color: #fff; }
+.lb-list { list-style: none; width: min(92vw, 480px); display: flex; flex-direction: column; gap: 6px; overflow-y: auto; }
+.lb-list li { display: flex; align-items: center; gap: 12px; background: rgba(255,255,255,.72); border-radius: 12px; padding: 10px 14px; }
+.lb-list li.me { box-shadow: 0 0 0 2px #ff4d6d inset; }
+.lb-list .rank { width: 32px; font-weight: 800; }
+.lb-list .nm { flex: 1; font-weight: 700; }
+.lb-list .sc { font-weight: 800; color: #c0392b; }
+
+.modal-btns { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.modal-btns .btn { margin-top: 0; }
 
 .game-wrap {
   display: flex;
