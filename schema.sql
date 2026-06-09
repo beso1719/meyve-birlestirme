@@ -20,6 +20,8 @@ create table if not exists public.duels (
   code             text primary key,
   seed             bigint not null,
   status           text not null default 'open',   -- 'open' | 'done'
+  mode             text not null default 'classic', -- classic | target | survival | coop
+  target_device    text,                            -- davet edilen arkadaşın cihazı (varsa)
   creator_nick     text,
   creator_device   text,
   creator_score    integer,
@@ -28,6 +30,32 @@ create table if not exists public.duels (
   challenger_score integer,
   created_at       timestamptz not null default now()
 );
+-- Var olan tabloya kolon eklemek için (idempotent):
+alter table public.duels add column if not exists mode text not null default 'classic';
+alter table public.duels add column if not exists target_device text;
+create index if not exists duels_target_idx on public.duels (target_device);
+
+-- ============ PROFİLLER (arkadaşlık + market + profil görüntüleme) ============
+create table if not exists public.profiles (
+  device      text primary key,
+  code        text unique not null,     -- 6 haneli arkadaş kodu
+  nickname    text not null,
+  coins       integer not null default 0,
+  skin        text not null default 'fruit',
+  owned       jsonb not null default '["fruit"]'::jsonb,
+  best        integer not null default 0,
+  wins        integer not null default 0,
+  updated_at  timestamptz not null default now()
+);
+create index if not exists profiles_nick_idx on public.profiles (lower(nickname));
+
+alter table public.profiles enable row level security;
+create policy "profiles_read"   on public.profiles for select using (true);
+create policy "profiles_insert" on public.profiles for insert with check (true);
+create policy "profiles_update" on public.profiles for update using (true) with check (true);
+
+-- Realtime'ı açmak için (Supabase panel → Database → Replication → duels tablosunu ekle),
+-- ya da: alter publication supabase_realtime add table public.duels;
 
 -- ============ GÜVENLİK (RLS) ============
 -- Takma ad sistemi (giriş yok) olduğundan anon kullanıcıya yazma/okuma izni veriyoruz.

@@ -25,9 +25,13 @@ const Game = (() => {
   let engine, world, walls = [];
   let cfg, cbs, rng;
   let score, current, nextTier, nextIsBomb, curIsBomb;
-  let canDrop, running, dropCount, timeLeft;
-  let dropX, overTimer, last, rafId;
+  let canDrop, running, paused, dropCount, timeLeft;
+  let dropX, overTimer, last, rafId, startedAt;
+  let activeSet = FRUITS; // aktif skin meyve seti
   const effects = [];
+
+  const sfx = (n, a) => { try { if (typeof Sound !== "undefined") Sound.play(n, a); } catch {} };
+  const buzz = (ms) => { try { if (typeof Store !== "undefined") Store.buzz(ms); } catch {} };
 
   function fitCanvas() {
     W = jar.clientWidth; H = jar.clientHeight;
@@ -103,12 +107,14 @@ const Game = (() => {
     if (!canDrop || !current || !running) return;
     if (curIsBomb) {
       explode(current.position.x, current.position.y);
+      sfx("bomb"); buzz(40);
       World.remove(world, current);
       current = null; canDrop = false;
     } else {
       Body.setStatic(current, false);
       current.bornAt = performance.now();
       current = null; canDrop = false;
+      sfx("drop");
     }
     dropCount++;
     if (cbs.onStats) cbs.onStats(stats());
@@ -142,11 +148,11 @@ const Game = (() => {
       const ny = (a.position.y + b.position.y) / 2;
       World.remove(world, a); World.remove(world, b);
       if (a.tier >= MAX_TIER) {
-        addEffect(nx, ny, MAX_TIER); addScore(100);
+        addEffect(nx, ny, MAX_TIER); addScore(100); sfx("merge", MAX_TIER); buzz(50);
       } else {
         const nt = a.tier + 1;
         World.add(world, makeFruit(nt, nx, ny, false));
-        addEffect(nx, ny, nt); addScore((nt + 1) * 2);
+        addEffect(nx, ny, nt); addScore((nt + 1) * 2); sfx("merge", nt); buzz(25);
       }
     }
   }
@@ -154,10 +160,14 @@ const Game = (() => {
   function addScore(p) {
     score += p;
     if (cbs.onStats) cbs.onStats(stats());
-    if (cfg.target && score >= cfg.target && cfg.mode === "campaign") {
-      // hedefe ulaşıldı ama oyuncu devam edip skoru artırabilsin diye bitirmiyoruz;
-      // sadece "geçti" işareti veriyoruz.
-      cbs.onTargetReached && cbs.onTargetReached();
+    if (cfg.target && score >= cfg.target) {
+      if (cfg.mode === "campaign") {
+        // hedefe ulaşıldı ama oyuncu devam edip skoru artırabilsin diye bitirmiyoruz
+        cbs.onTargetReached && cbs.onTargetReached();
+      } else if (cfg.win === "target") {
+        // hedef yarışı: ilk ulaşan biter
+        finish(true, "target");
+      }
     }
   }
 
@@ -179,14 +189,18 @@ const Game = (() => {
       if (body.position.y - body.radius < DEATH_Y && Math.abs(body.velocity.y) < 0.4) { danger = true; break; }
     }
     overTimer = danger ? overTimer + dt : 0;
-    if (overTimer > 1.6) finish(cfg.target ? score >= cfg.target : false);
+    if (overTimer > 1.6) finish(cfg.target ? score >= cfg.target : false, "dead");
   }
 
-  function finish(won) {
+  function finish(won, reason = "") {
     if (!running) return;
-    running = false;
+    running = false; paused = false;
     cancelAnimationFrame(rafId);
-    cbs.onEnd && cbs.onEnd({ score: Math.round(score), won, mode: cfg.mode, level: cfg.level });
+    sfx(won ? "win" : "lose");
+    cbs.onEnd && cbs.onEnd({
+      score: Math.round(score), won, reason, mode: cfg.mode,
+      level: cfg.level, duelMode: cfg.win, survivedMs: performance.now() - startedAt,
+    });
   }
 
   // ---- Çizim ----
@@ -205,7 +219,7 @@ const Game = (() => {
     ctx.restore();
   }
   function drawFruit(x, y, tier, alpha = 1) {
-    const f = FRUITS[tier]; const r = f.r * S;
+    const f = activeSet[tier]; const r = FRUITS[tier].r * S;
     ctx.save(); ctx.globalAlpha = alpha;
     const grad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.2, x, y, r);
     grad.addColorStop(0, "#ffffff88"); grad.addColorStop(0.25, f.color); grad.addColorStop(1, shade(f.color, -25));
@@ -228,7 +242,7 @@ const Game = (() => {
   }
   function drawNext() {
     nextCtx.clearRect(0, 0, 80, 80);
-    const s = nextIsBomb ? SPECIAL.bomb : FRUITS[nextTier];
+    const s = nextIsBomb ? SPECIAL.bomb : activeSet[nextTier];
     if (s.img && s.img.complete && s.img.naturalWidth > 0) nextCtx.drawImage(s.img, 16, 16, 48, 48);
     else { nextCtx.font = "34px sans-serif"; nextCtx.textAlign = "center"; nextCtx.textBaseline = "middle"; nextCtx.fillText(s.emoji, 40, 42); }
   }
@@ -266,7 +280,7 @@ const Game = (() => {
     }
     if (cfg.timeLimit) {
       timeLeft -= dt;
-      if (timeLeft <= 0) { timeLeft = 0; finish(cfg.target ? score >= cfg.target : false); return; }
+      if (timeLeft <= 0) { timeLeft = 0; finish(cfg.target ? score >= cfg.target : false, "time"); return; }
     }
     if (cfg.risingDeath) { DEATH_Y = Math.min(H * 0.5, DEATH_Y + cfg.risingDeath * dt); }
     Engine.update(engine, 1000 / 60);
@@ -280,6 +294,8 @@ const Game = (() => {
     cfg = Object.assign({}, BASE_CFG, config);
     cbs = callbacks || {};
     rng = mulberry32(cfg.seed != null ? cfg.seed : (Math.random() * 2 ** 31) | 0);
+    activeSet = (typeof Store !== "undefined" && typeof getSkin !== "undefined") ? getSkin(Store.equipped()).set : FRUITS;
+    paused = false; startedAt = performance.now();
 
     if (engine) { World.clear(world, false); Engine.clear(engine); }
     engine = Engine.create(); engine.gravity.y = cfg.gravity; world = engine.world;
@@ -299,7 +315,18 @@ const Game = (() => {
   }
 
   function stop() { running = false; cancelAnimationFrame(rafId); }
-  function quit() { stop(); if (world) for (const b of Composite.allBodies(world)) if (b.label === "fruit" || b.label === "bomb") World.remove(world, b); }
+  function quit() { stop(); paused = false; if (world) for (const b of Composite.allBodies(world)) if (b.label === "fruit" || b.label === "bomb") World.remove(world, b); }
+
+  function pause() { if (!running || paused) return; paused = true; cancelAnimationFrame(rafId); }
+  function resume() { if (!running || !paused) return; paused = false; last = performance.now(); rafId = requestAnimationFrame(loop); }
+  function isRunning() { return running && !paused; }
+
+  // Canlı düello için anlık durum
+  function getLiveState() {
+    let topTier = 0;
+    if (world) for (const b of Composite.allBodies(world)) if (b.label === "fruit" && b.tier > topTier) topTier = b.tier;
+    return { score: Math.round(score), topTier, dead: !running, timeLeft: cfg && cfg.timeLimit ? Math.ceil(timeLeft) : null };
+  }
 
   // kontroller
   function pointerX(e) {
@@ -315,5 +342,5 @@ const Game = (() => {
   window.addEventListener("keydown", (e) => { if (e.code === "Space") { e.preventDefault(); drop(); } });
   window.addEventListener("resize", () => { if (running) { fitCanvas(); rebuildWalls(); } });
 
-  return { start, stop, quit };
+  return { start, stop, quit, pause, resume, isRunning, getLiveState };
 })();

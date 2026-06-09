@@ -256,6 +256,81 @@ body {
 .btn:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(255,77,109,.55); }
 .btn:active { transform: translateY(0); }
 
+/* ===== v3: altın, menü satırları ===== */
+.coins-badge { position: absolute; top: 14px; right: 14px; background: rgba(255,255,255,.8);
+  border-radius: 14px; padding: 6px 12px; font-weight: 800; font-size: 15px; box-shadow: 0 4px 12px rgba(180,90,40,.25); }
+.menu-row { display: flex; gap: 12px; }
+.btn.half { flex: 1; padding: 12px; font-size: 15px; }
+.coins-mini { font-size: 15px; font-weight: 800; min-width: 56px; text-align: right; }
+.lv-reward { font-size: 11px; font-weight: 800; color: #b8860b; }
+
+/* ===== ikon butonlar / oyun-içi ===== */
+.icon-btn { background: rgba(255,255,255,.75); border: none; border-radius: 12px; font-size: 20px;
+  padding: 6px 12px; cursor: pointer; box-shadow: 0 4px 10px rgba(180,90,40,.2); }
+.duel-live { background: rgba(255,255,255,.8); border-radius: 12px; padding: 8px 14px; font-weight: 700;
+  font-size: 14px; text-align: center; width: min(94vw, 460px); box-shadow: 0 4px 12px rgba(180,90,40,.2); }
+.duel-live .bar { height: 8px; background: rgba(0,0,0,.12); border-radius: 6px; margin-top: 6px; overflow: hidden; }
+.duel-live .bar i { display: block; height: 100%; background: linear-gradient(90deg,#ff7a59,#ff4d6d); }
+
+/* ===== düello modları ===== */
+.mode-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; width: 100%; }
+.mode-chip { background: rgba(255,255,255,.7); border: 2px solid transparent; border-radius: 14px;
+  padding: 10px 6px; font-weight: 800; font-size: 13px; cursor: pointer; color: #4a2c00; line-height: 1.4; }
+.mode-chip.active { border-color: #ff4d6d; background: #fff; }
+.duel-invites { width: 100%; background: rgba(255,255,255,.78); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.invite-row, .fr-res { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 700; }
+.friend-invite { width: 100%; }
+.fi-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+
+/* ===== mini butonlar ===== */
+.mini-btn { background: linear-gradient(160deg,#ff7a59,#ff4d6d); color: #fff; border: none; border-radius: 10px;
+  padding: 6px 12px; font-weight: 800; font-size: 13px; cursor: pointer; }
+.mini-btn.ghost { background: rgba(0,0,0,.1); color: #4a2c00; }
+.mini-btn.buy { background: linear-gradient(160deg,#f6b93b,#e1b12c); }
+
+/* ===== market ===== */
+.skin-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; width: min(92vw, 480px); overflow-y: auto; }
+.skin-card { background: rgba(255,255,255,.78); border-radius: 18px; padding: 14px 10px; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 8px; box-shadow: 0 6px 16px rgba(180,90,40,.2); border: 2px solid transparent; }
+.skin-card.active { border-color: #2ecc71; }
+.skin-emojis { font-size: 26px; letter-spacing: 1px; }
+.skin-name { font-weight: 800; font-size: 14px; }
+.skin-tag { color: #2ecc71; font-weight: 800; font-size: 13px; }
+
+/* ===== profil ===== */
+.profile-body { background: rgba(255,255,255,.8); border-radius: 22px; padding: 24px; width: min(88vw, 380px);
+  text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.prof-avatar { font-size: 56px; }
+.prof-nick { font-size: 22px; font-weight: 900; }
+.prof-code { font-size: 14px; opacity: .8; }
+.prof-stats { display: flex; gap: 16px; margin: 8px 0; }
+.prof-stats .stat { display: flex; flex-direction: column; align-items: center; }
+.prof-stats .stat b { font-size: 20px; }
+
+/* ===== arkadaşlar ===== */
+.friends-box { width: min(92vw, 460px); display: flex; flex-direction: column; gap: 12px; align-items: stretch; }
+.mycode { text-align: center; font-size: 15px; font-weight: 700; }
+.friend-results { display: flex; flex-direction: column; gap: 6px; }
+.friend-results .fr-res { background: rgba(255,255,255,.7); border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+.friend-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.friend-list li { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,.78); border-radius: 12px; padding: 8px 12px; }
+.fr-nick { flex: 1; font-weight: 800; cursor: pointer; }
+.fr-code { font-size: 12px; opacity: .6; font-weight: 700; }
+
+/* ===== ayarlar / ses ===== */
+.settings-box { width: min(90vw, 400px); display: flex; flex-direction: column; gap: 18px;
+  background: rgba(255,255,255,.78); border-radius: 22px; padding: 24px; }
+.vol-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 800; }
+.vol-row input[type=range] { flex: 1; accent-color: #ff4d6d; }
+#pause-modal .vol-row { width: 240px; }
+.switch { position: relative; width: 50px; height: 28px; }
+.switch input { display: none; }
+.switch .slider { position: absolute; inset: 0; background: rgba(0,0,0,.2); border-radius: 20px; transition: .2s; }
+.switch .slider::before { content: ""; position: absolute; width: 22px; height: 22px; left: 3px; top: 3px;
+  background: #fff; border-radius: 50%; transition: .2s; }
+.switch input:checked + .slider { background: #2ecc71; }
+.switch input:checked + .slider::before { transform: translateX(22px); }
+
 /* Küçük ekran */
 @media (max-width: 520px) {
   .game-wrap { gap: 8px; padding: 8px; }

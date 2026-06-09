@@ -11,23 +11,32 @@
 
   <!-- ANA MENÜ -->
   <section class="screen" id="screen-menu">
+    <div class="coins-badge" id="coins-badge">🪙 <span id="coin-count">0</span></div>
     <h1 class="big-title">🍉 Meyve<br>Birleştirme</h1>
     <div class="nick-row">
       <span class="label">Takma ad</span>
       <input id="nick" maxlength="20" placeholder="adını yaz" autocomplete="off">
     </div>
     <div class="menu-btns">
-      <button class="btn big" data-go="campaign">🗺️ Kampanya</button>
+      <button class="btn big" data-go="campaign" id="btn-campaign">🧭 Macera</button>
       <button class="btn big" data-go="endless">♾️ Sonsuz Mod</button>
       <button class="btn big" data-go="duel">⚔️ Düello</button>
-      <button class="btn big ghost" data-go="leaderboard">🏆 Skor Tablosu</button>
+      <button class="btn big ghost" data-go="market">🛒 Market</button>
+      <div class="menu-row">
+        <button class="btn ghost half" data-go="leaderboard">🏆 Skorlar</button>
+        <button class="btn ghost half" data-go="friends">👥 Arkadaşlar</button>
+      </div>
+      <div class="menu-row">
+        <button class="btn ghost half" data-go="profile">🙂 Profilim</button>
+        <button class="btn ghost half" data-go="settings">⚙️ Ayarlar</button>
+      </div>
     </div>
     <p class="conn" id="conn-state"></p>
   </section>
 
   <!-- LEVEL SEÇİMİ -->
   <section class="screen hidden" id="screen-campaign">
-    <div class="topnav"><button class="back" data-back>‹ Geri</button><h2>Kampanya</h2><span></span></div>
+    <div class="topnav"><button class="back" data-back>‹ Geri</button><h2 id="campaign-title">Macera</h2><span></span></div>
     <div id="level-grid" class="level-grid"></div>
   </section>
 
@@ -35,14 +44,63 @@
   <section class="screen hidden" id="screen-duel">
     <div class="topnav"><button class="back" data-back>‹ Geri</button><h2>⚔️ Düello</h2><span></span></div>
     <div class="duel-box">
+      <div id="duel-invites" class="duel-invites hidden"></div>
+
+      <span class="label">MOD SEÇ</span>
+      <div class="mode-list" id="mode-list"></div>
+      <p class="muted" id="mode-desc"></p>
+
       <button class="btn big" id="duel-create">🆕 Yeni Düello Oluştur</button>
-      <p class="muted">Bir kod alırsın, rakibine yollarsın.</p>
-      <div class="or">— veya —</div>
+
+      <div id="friend-invite" class="friend-invite"></div>
+
+      <div class="or">— veya kodla katıl —</div>
       <div class="join-row">
         <input id="duel-code" maxlength="5" placeholder="KOD" autocomplete="off">
         <button class="btn" id="duel-join">Katıl</button>
       </div>
       <div id="duel-info" class="duel-info hidden"></div>
+    </div>
+  </section>
+
+  <!-- MARKET -->
+  <section class="screen hidden" id="screen-market">
+    <div class="topnav"><button class="back" data-back>‹ Geri</button><h2>🛒 Market</h2><span class="coins-mini">🪙 <b id="market-coins">0</b></span></div>
+    <p class="muted">Düello ve macera kazandıkça altın topla, yeni desenler aç.</p>
+    <div id="skin-grid" class="skin-grid"></div>
+  </section>
+
+  <!-- PROFİL -->
+  <section class="screen hidden" id="screen-profile">
+    <div class="topnav"><button class="back" data-back>‹ Geri</button><h2 id="profile-title">🙂 Profil</h2><span></span></div>
+    <div id="profile-body" class="profile-body"></div>
+  </section>
+
+  <!-- ARKADAŞLAR -->
+  <section class="screen hidden" id="screen-friends">
+    <div class="topnav"><button class="back" data-back>‹ Geri</button><h2>👥 Arkadaşlar</h2><span></span></div>
+    <div class="friends-box">
+      <div class="mycode">Senin kodun: <b id="my-code">——</b> <button class="mini-btn" id="copy-code">Kopyala</button></div>
+      <div class="join-row">
+        <input id="friend-input" maxlength="20" placeholder="kod veya isim" autocomplete="off">
+        <button class="btn" id="friend-search">Bul</button>
+      </div>
+      <div id="friend-results" class="friend-results"></div>
+      <span class="label">ARKADAŞLARIM</span>
+      <ul id="friend-list" class="friend-list"></ul>
+      <p class="muted center" id="friend-empty"></p>
+    </div>
+  </section>
+
+  <!-- AYARLAR -->
+  <section class="screen hidden" id="screen-settings">
+    <div class="topnav"><button class="back" data-back>‹ Geri</button><h2>⚙️ Ayarlar</h2><span></span></div>
+    <div class="settings-box">
+      <div class="vol-row"><span>🎵 Müzik</span><input type="range" id="set-music" min="0" max="100"></div>
+      <div class="vol-row"><span>🔊 Ses Efektleri</span><input type="range" id="set-sfx" min="0" max="100"></div>
+      <div class="vol-row"><span>📳 Titreşim</span><label class="switch"><input type="checkbox" id="set-vibrate"><span class="slider"></span></label></div>
+      <button class="btn ghost" id="reset-progress">🗑️ Macera İlerlemesini Sıfırla</button>
+      <p class="muted center">Düello galibiyetleri ve altın daha çok kazandırır. İyi oyunlar!</p>
     </div>
   </section>
 
@@ -62,10 +120,12 @@
   <section class="screen hidden" id="screen-game">
     <div class="game-wrap">
       <header class="topbar">
-        <button class="back small" data-back>‹</button>
+        <button class="icon-btn" data-pause title="Menü">⏸️</button>
         <div id="hud" class="hud"></div>
+        <button class="icon-btn" id="sound-toggle" title="Ses">🔊</button>
         <div class="card score-card"><span class="label">SKOR</span><span id="score" class="value">0</span></div>
       </header>
+      <div id="duel-live" class="duel-live hidden"></div>
       <div class="play-area">
         <div class="next-box"><span class="label">SIRADAKİ</span><canvas id="next" width="80" height="80"></canvas></div>
         <div class="jar"><canvas id="game"></canvas></div>
@@ -81,11 +141,26 @@
   <div class="modal" id="result-modal"></div>
 </div>
 
+<!-- DURAKLAT MENÜSÜ -->
+<div id="pause-overlay" class="overlay hidden">
+  <div class="modal" id="pause-modal">
+    <h2>⏸️ Duraklatıldı</h2>
+    <div class="vol-row"><span>🎵 Müzik</span><input type="range" id="pause-music" min="0" max="100"></div>
+    <div class="vol-row"><span>🔊 Efekt</span><input type="range" id="pause-sfx" min="0" max="100"></div>
+    <div class="modal-btns">
+      <button class="btn" id="pause-resume">▶️ Devam Et</button>
+      <button class="btn ghost" id="pause-menu">🏠 Menüye Dön</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="matter.min.js"></script>
 <script src="config.js"></script>
 <script src="data.js"></script>
+<script src="audio.js"></script>
 <script src="supabase-client.js"></script>
+<script src="store.js"></script>
 <script src="game.js"></script>
 <script src="app.js"></script>
 </body>
