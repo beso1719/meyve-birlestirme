@@ -419,12 +419,16 @@ const App = (() => {
     if (m.risingDeath) c.risingDeath = m.risingDeath;
     if (m.attacks) c.attacks = true;
     if (m.deathLineRatio) c.deathLineRatio = m.deathLineRatio;
+    if (m.bombChance) c.bombChance = m.bombChance;
+    if (m.gravity) c.gravity = m.gravity;
     return c;
   }
 
-  // Meyve savaşı: ben birleştirince rakibe meyve fırlat
+  // Meyve savaşı: ben birleştirince rakibe meyve fırlat (oyunum bittiyse gönderme)
   function sendAttack(power) {
-    if (activeDuel && activeDuel.channel) activeDuel.channel.attack({ power });
+    if (activeDuel && activeDuel.channel && Game.isRunning() && !activeDuel.finished) {
+      activeDuel.channel.attack({ power });
+    }
   }
 
   // ---- Canlı düello kanalı ----
@@ -509,10 +513,12 @@ const App = (() => {
     updateDuelLive();
     if (Game.isRunning() && !activeDuel.finished) {
       const mode = getDuelMode(activeDuel.mode);
-      // Hayatta kal: rakip öldüyse ben kazandım. Hedef yarışı: rakip hedefe ulaştıysa ben kaybettim.
-      if (mode.win === "survive" && p.dead) Game.endNow(true, "opp-dead");
-      else if (mode.win === "target" && p.won) Game.endNow(false, "opp-target");
-      else if (mode.win === "tug") Game.endNow(Game.getLiveState().score >= (p.metric || 0), "opp-tug");
+      // Rakip bitirince ben de biterim. Kazanan, moda göre belirlenir.
+      let iWon = true;
+      if (mode.win === "survive") iWon = !!p.dead;                              // rakip öldüyse kazandım
+      else if (mode.win === "target") iWon = !p.won;                           // rakip hedefe ulaştıysa kaybettim
+      else if (mode.win === "tug") iWon = Game.getLiveState().score >= (p.metric || 0);
+      Game.endNow(iWon, "opp-ended");
     } else if (activeDuel.finished) {
       // Ben zaten bitirmiştim, rakibi bekliyordum → sonucu güncelle.
       resolveDuelResult();
