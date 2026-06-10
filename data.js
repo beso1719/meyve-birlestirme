@@ -139,7 +139,7 @@ const DUEL_MODES = [
   { id: "classic",  name: "Klasik Yarış",  emoji: "⚔️", timeLimit: 120, desc: "2 dakikada en yüksek skoru yapan kazanır.", win: "score" },
   { id: "target",   name: "Hedef Yarışı",  emoji: "🏁", target: 1500, timeLimit: 180, desc: "1500 skora ilk ulaşan kazanır.", win: "target" },
   { id: "survival", name: "Hayatta Kal",   emoji: "💀", risingDeath: 2.5, timeLimit: 0, desc: "Ölüm çizgisi yükselir, son ayakta kalan kazanır.", win: "survive" },
-  { id: "coop",     name: "Ortak Hedef",   emoji: "🤝", target: 4000, timeLimit: 150, desc: "İkiniz birlikte 4000 skora ulaşmaya çalışın.", win: "coop" },
+  { id: "coop",     name: "Ortak Hedef",   emoji: "🤝", target: 4000, timeLimit: 0, desc: "İkiniz birlikte 4000 skora ulaşın, süre yok.", win: "coop" },
 ];
 function getDuelMode(id) { return DUEL_MODES.find((m) => m.id === id) || DUEL_MODES[0]; }
 
