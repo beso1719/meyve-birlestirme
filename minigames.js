@@ -10,6 +10,9 @@ const MiniGames = (() => {
     { id: "ninja",  name: "Meyve Ninja",  emoji: "🥷", desc: "60 saniyede uçan meyvelere dokun. Bombaya dokunma!", hint: "Meyvelere dokun • Bombadan uzak dur" },
     { id: "memory", name: "Hafıza",       emoji: "🧠", desc: "Meyve kartlarını eşleştir. Ne kadar hızlı, o kadar çok altın!", hint: "Kartlara dokunarak eşini bul" },
     { id: "snake",  name: "Meyve Yılanı", emoji: "🐍", desc: "Klasik yılan! Meyve ye, büyü, duvara ve kendine çarpma.", hint: "Kaydır veya ok tuşları ile yön ver" },
+    { id: "flappy", name: "Uçan Karpuz",  emoji: "🍉", desc: "Dokunarak zıplat, engellerin arasından geç!", hint: "Dokun = zıpla • Engellere çarpma" },
+    { id: "whack",  name: "Meyve Avı",    emoji: "🔨", desc: "Deliklerden çıkan meyvelere hızla vur. Bombaya vurma!", hint: "Çıkan meyvelere dokun • 45 saniye" },
+    { id: "simon",  name: "Sıra Takip",   emoji: "🎵", desc: "Yanan meyve sırasını ezberle ve tekrarla. Her tur uzar!", hint: "Sırayı izle, sonra aynısını bas" },
   ];
 
   const sfx = (n, a) => { try { Sound.play(n, a); } catch {} };
@@ -45,9 +48,10 @@ const MiniGames = (() => {
     $("#mini-score").textContent = "0";
     $("#mini-hud").innerHTML = "";
     const dom = $("#mini-dom"), cv = canvas();
-    if (id === "memory") { dom.classList.remove("hidden"); cv.classList.add("hidden"); }
+    if (id === "memory" || id === "whack" || id === "simon") { dom.classList.remove("hidden"); cv.classList.add("hidden"); }
     else { dom.classList.add("hidden"); cv.classList.remove("hidden"); }
-    cleanup = ({ catch: startCatch, ninja: startNinja, memory: startMemory, snake: startSnake })[id]();
+    cleanup = ({ catch: startCatch, ninja: startNinja, memory: startMemory, snake: startSnake,
+                 flappy: startFlappy, whack: startWhack, simon: startSimon })[id]();
   }
 
   function stop() {
@@ -111,9 +115,11 @@ const MiniGames = (() => {
     function loop(now) {
       const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
       if (t > spawnAt) {
-        const bomb = Math.random() < 0.18;
-        items.push({ x: 30 + Math.random() * (W - 60), y: -30, vy: 130 + t * 6 + Math.random() * 80,
-                     em: bomb ? "💣" : FR[(Math.random() * 7) | 0], bomb });
+        const r = Math.random();
+        // %18 bomba, %6 altın yıldız (+50), %3 kalp (+1 can), kalanı meyve
+        const kind = r < 0.18 ? "bomb" : r < 0.24 ? "star" : r < 0.27 ? "heart" : "fruit";
+        const em = { bomb: "💣", star: "⭐", heart: "❤️" }[kind] || FR[(Math.random() * 7) | 0];
+        items.push({ x: 30 + Math.random() * (W - 60), y: -30, vy: 130 + t * 6 + Math.random() * 80, em, kind });
         spawnAt = t + Math.max(0.35, 0.9 - t * 0.012);
       }
       const catchY = H - 64;
@@ -121,7 +127,9 @@ const MiniGames = (() => {
         const it = items[i]; it.y += it.vy * dt;
         if (it.y > catchY && it.y < catchY + 46 && Math.abs(it.x - bx) < 52) {
           items.splice(i, 1);
-          if (it.bomb) { lives--; sfx("bomb"); if (lives <= 0) over = true; }
+          if (it.kind === "bomb") { lives--; sfx("bomb"); if (lives <= 0) over = true; }
+          else if (it.kind === "star") { score += 50; setScore(score); sfx("merge", 6); }
+          else if (it.kind === "heart") { lives = Math.min(5, lives + 1); sfx("coin"); }
           else { score += 10; setScore(score); sfx("merge", 2); }
         } else if (it.y > H + 30) items.splice(i, 1);
       }
@@ -141,6 +149,7 @@ const MiniGames = (() => {
     const [W, H, ctx] = fitCanvas();
     const cv = canvas();
     let score = 0, lives = 3, timeLeft = 60, items = [], pops = [], spawnAt = 0, t = 0, over = false;
+    let combo = 0, comboAt = 0; // art arda hızlı kesimler kombo sayar
 
     const tap = (e) => {
       const [x, y] = px(e, cv);
@@ -149,8 +158,14 @@ const MiniGames = (() => {
         if (Math.hypot(it.x - x, it.y - y) < 44) {
           items.splice(i, 1);
           pops.push({ x: it.x, y: it.y, t: 0, em: it.bomb ? "💥" : "✨" });
-          if (it.bomb) { lives--; sfx("bomb"); if (lives <= 0) over = true; }
-          else { score += 10; setScore(score); sfx("merge", 3); }
+          if (it.bomb) { combo = 0; lives--; sfx("bomb"); if (lives <= 0) over = true; }
+          else {
+            combo = t - comboAt < 1.2 ? combo + 1 : 1; comboAt = t;
+            const mult = Math.min(3, 1 + Math.floor(combo / 4)); // her 4 kesimde çarpan +1 (max x3)
+            const base = it.gold ? 50 : 10;
+            score += base * mult; setScore(score); sfx("merge", Math.min(8, 2 + combo));
+            if (mult > 1) pops.push({ x: it.x, y: it.y - 34, t: 0, em: `x${mult}` });
+          }
           return;
         }
       }
@@ -164,10 +179,10 @@ const MiniGames = (() => {
       if (t > spawnAt) {
         const n = 1 + ((Math.random() * 2) | 0);
         for (let i = 0; i < n; i++) {
-          const bomb = Math.random() < 0.16;
+          const bomb = Math.random() < 0.16, gold = !bomb && Math.random() < 0.07;
           items.push({ x: 40 + Math.random() * (W - 80), y: H + 30,
                        vx: (Math.random() - 0.5) * 120, vy: -(H * 1.15 + Math.random() * H * 0.3),
-                       em: bomb ? "💣" : FR[(Math.random() * FR.length) | 0], bomb });
+                       em: bomb ? "💣" : gold ? "⭐" : FR[(Math.random() * FR.length) | 0], bomb, gold });
         }
         spawnAt = t + 0.8 + Math.random() * 0.5;
       }
@@ -176,7 +191,8 @@ const MiniGames = (() => {
         it.vy += H * 0.78 * dt; it.x += it.vx * dt; it.y += it.vy * dt;
         if (it.y > H + 60) items.splice(i, 1);
       }
-      setHud(`<span class="hud-item">⏱️ ${Math.ceil(timeLeft)}</span><span class="hud-item">❤️ ${lives}</span>`);
+      if (combo > 0 && t - comboAt > 1.2) combo = 0; // kombo süresi doldu
+      setHud(`<span class="hud-item">⏱️ ${Math.ceil(timeLeft)}</span><span class="hud-item">❤️ ${lives}</span>${combo >= 4 ? `<span class="hud-item ok">🔥 x${Math.min(3, 1 + Math.floor(combo / 4))}</span>` : ""}`);
       ctx.clearRect(0, 0, W, H);
       for (const it of items) drawEmoji(ctx, it.em, it.x, it.y, 42);
       for (let i = pops.length - 1; i >= 0; i--) {
@@ -299,6 +315,140 @@ const MiniGames = (() => {
     }
     raf = requestAnimationFrame(loop);
     return () => { window.removeEventListener("keydown", keys); cv.removeEventListener("touchstart", ts); cv.removeEventListener("touchend", te); };
+  }
+
+  // ================= 5) UÇAN KARPUZ =================
+  function startFlappy() {
+    const [W, H, ctx] = fitCanvas();
+    const cv = canvas();
+    let y = H / 2, vy = 0, pipes = [], t = 0, spawnAt = 0, score = 0, over = false, started = false;
+    const bx = W * 0.28, R = 22, gap = Math.max(150, H * 0.3);
+
+    const flap = (e) => { started = true; vy = -H * 0.62; sfx("drop"); if (e.cancelable) e.preventDefault(); };
+    cv.addEventListener("mousedown", flap);
+    cv.addEventListener("touchstart", flap, { passive: false });
+
+    let last = performance.now();
+    function loop(now) {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      if (started) {
+        t += dt;
+        vy += H * 1.5 * dt; y += vy * dt;
+        if (t > spawnAt) {
+          const cy = gap / 2 + 40 + Math.random() * (H - gap - 80);
+          pipes.push({ x: W + 40, cy, passed: false });
+          spawnAt = t + 1.7;
+        }
+        for (let i = pipes.length - 1; i >= 0; i--) {
+          const p = pipes[i]; p.x -= W * 0.32 * dt;
+          if (!p.passed && p.x < bx - 28) { p.passed = true; score += 10; setScore(score); sfx("merge", 2); }
+          if (p.x < -60) pipes.splice(i, 1);
+          // çarpışma: borunun içindeyken boşluk dışına taşarsa
+          if (Math.abs(p.x - bx) < 28 + R && (y - R < p.cy - gap / 2 || y + R > p.cy + gap / 2)) over = true;
+        }
+        if (y + R > H || y - R < 0) over = true;
+      }
+      setHud(`<span class="hud-item">🚧 ${score / 10}</span>`);
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = "#27ae60";
+      for (const p of pipes) {
+        ctx.beginPath(); ctx.roundRect(p.x - 28, -10, 56, p.cy - gap / 2 + 10, 8); ctx.fill();
+        ctx.beginPath(); ctx.roundRect(p.x - 28, p.cy + gap / 2, 56, H - p.cy - gap / 2 + 10, 8); ctx.fill();
+      }
+      ctx.save(); ctx.translate(bx, y); ctx.rotate(Math.max(-0.5, Math.min(0.6, vy / (H * 0.9))));
+      drawEmoji(ctx, "🍉", 0, 0, R * 2.2); ctx.restore();
+      if (!started) drawEmoji(ctx, "👆", bx, y + 70, 36);
+      if (over) { sfx("lose"); gameOver(score); return; }
+      raf = requestAnimationFrame(loop);
+    }
+    raf = requestAnimationFrame(loop);
+    return () => { cv.removeEventListener("mousedown", flap); cv.removeEventListener("touchstart", flap); };
+  }
+
+  // ================= 6) MEYVE AVI =================
+  function startWhack() {
+    const dom = $("#mini-dom");
+    let score = 0, lives = 3, timeLeft = 45, over = false, timers = [];
+    dom.innerHTML = `<div class="whack-grid">` +
+      Array.from({ length: 9 }, (_, i) => `<button class="whack-hole" data-i="${i}"><span class="wh-em"></span></button>`).join("") + `</div>`;
+    const holes = [...dom.querySelectorAll(".whack-hole")];
+
+    function popOne() {
+      if (over) return;
+      const empty = holes.filter((h) => !h.dataset.em);
+      if (!empty.length) return;
+      const h = empty[(Math.random() * empty.length) | 0];
+      const bomb = Math.random() < 0.2;
+      h.dataset.em = bomb ? "bomb" : "fruit";
+      h.querySelector(".wh-em").textContent = bomb ? "💣" : FR[(Math.random() * 7) | 0];
+      h.classList.add("up");
+      const hide = setTimeout(() => { h.classList.remove("up"); h.dataset.em = ""; }, Math.max(500, 1100 - score * 4));
+      timers.push(hide);
+    }
+    holes.forEach((h) => h.addEventListener("click", () => {
+      if (!h.dataset.em || over) return;
+      const bomb = h.dataset.em === "bomb";
+      h.classList.remove("up"); h.dataset.em = "";
+      if (bomb) { lives--; sfx("bomb"); if (lives <= 0) end(); }
+      else { score += 10; setScore(score); sfx("merge", 2); }
+    }));
+
+    const popTimer = setInterval(popOne, 550);
+    const tick = setInterval(() => {
+      timeLeft--;
+      setHud(`<span class="hud-item">⏱️ ${timeLeft}</span><span class="hud-item">❤️ ${lives}</span>`);
+      if (timeLeft <= 0) end();
+    }, 1000);
+    setHud(`<span class="hud-item">⏱️ ${timeLeft}</span><span class="hud-item">❤️ ${lives}</span>`);
+
+    function end() { if (over) return; over = true; sfx(lives > 0 ? "win" : "lose"); gameOver(score); }
+    return () => { clearInterval(popTimer); clearInterval(tick); timers.forEach(clearTimeout); };
+  }
+
+  // ================= 7) SIRA TAKİP =================
+  function startSimon() {
+    const dom = $("#mini-dom");
+    const BTNS = [
+      { em: "🍒", c: "#e74c3c" }, { em: "🍋", c: "#f1c40f" },
+      { em: "🍏", c: "#2ecc71" }, { em: "🫐", c: "#3498db" },
+    ];
+    let seq = [], pos = 0, round = 0, busy = true, over = false, timers = [];
+    dom.innerHTML = `<div class="simon-wrap"><div class="simon-msg" id="simon-msg">İzle…</div><div class="simon-grid">` +
+      BTNS.map((b, i) => `<button class="simon-btn" data-i="${i}" style="--c:${b.c}">${b.em}</button>`).join("") +
+      `</div></div>`;
+    const btns = [...dom.querySelectorAll(".simon-btn")];
+    const msg = dom.querySelector("#simon-msg");
+    const wait = (ms) => new Promise((res) => timers.push(setTimeout(res, ms)));
+
+    function lightUp(i, ms = 420) {
+      btns[i].classList.add("lit"); sfx("merge", i + 1);
+      timers.push(setTimeout(() => btns[i].classList.remove("lit"), ms * 0.7));
+    }
+    async function playSeq() {
+      busy = true; msg.textContent = `Tur ${round} — İzle…`;
+      await wait(700);
+      for (const i of seq) { if (over) return; lightUp(i); await wait(Math.max(280, 560 - round * 18)); }
+      busy = false; pos = 0; msg.textContent = "Sıra sende!";
+    }
+    function nextRound() {
+      round++; seq.push((Math.random() * 4) | 0);
+      setScore(round * 20 - 20); setHud(`<span class="hud-item">🎵 Tur ${round}</span>`);
+      playSeq();
+    }
+    btns.forEach((b) => b.addEventListener("click", async () => {
+      if (busy || over) return;
+      const i = +b.dataset.i;
+      lightUp(i, 260);
+      if (i !== seq[pos]) {
+        over = true; msg.textContent = "Yanlış! 😅"; sfx("lose");
+        timers.push(setTimeout(() => gameOver((round - 1) * 20, `<br>🎵 ${round - 1} tur tamamlandı`), 700));
+        return;
+      }
+      pos++;
+      if (pos === seq.length) { busy = true; msg.textContent = "Doğru! 🎉"; await wait(600); if (!over) nextRound(); }
+    }));
+    nextRound();
+    return () => timers.forEach(clearTimeout);
   }
 
   $("#mini-back").addEventListener("click", () => {
