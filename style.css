@@ -366,3 +366,23 @@ body {
   .next-box { right: 6px; top: 6px; left: auto; background: rgba(255,255,255,.85); padding: 5px; }
   .next-box canvas { width: 48px; height: 48px; }
 }
+
+/* ===== mini oyunlar ===== */
+.mini-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; width: min(92vw, 480px); overflow-y: auto; }
+.mini-card { background: rgba(255,255,255,.78); border: 2px solid transparent; border-radius: 18px; padding: 16px 10px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; text-align: center;
+  box-shadow: 0 6px 16px rgba(180,90,40,.2); font-family: inherit; }
+.mini-card:active { transform: scale(.97); }
+.mg-emoji { font-size: 40px; }
+.mg-name { font-weight: 900; font-size: 16px; color: #4a2c00; }
+.mg-desc { font-size: 12px; opacity: .75; color: #4a2c00; line-height: 1.35; }
+.mg-best { font-size: 12px; font-weight: 800; color: #e67e22; }
+.mini-area .jar { position: relative; }
+.mini-dom { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; }
+.mem-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: min(86vw, 380px); }
+.mem-card { aspect-ratio: 1; border: none; border-radius: 14px; font-size: 30px; cursor: pointer;
+  background: linear-gradient(160deg,#ff7a59,#ff4d6d); box-shadow: 0 4px 10px rgba(180,90,40,.25); font-family: inherit; }
+.mem-card .mem-face { opacity: 0; transition: opacity .15s; }
+.mem-card.open, .mem-card.done { background: rgba(255,255,255,.9); }
+.mem-card.open .mem-face, .mem-card.done .mem-face { opacity: 1; }
+.mem-card.done { outline: 3px solid #2ecc71; cursor: default; }

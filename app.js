@@ -1,7 +1,7 @@
 // 🎮 Uygulama akışı: menü, ekranlar, macera/market/profil/arkadaş/düello, sonuç
 const App = (() => {
   const $ = (s) => document.querySelector(s);
-  const screens = ["menu", "campaign", "duel", "market", "profile", "friends", "settings", "leaderboard", "game"];
+  const screens = ["menu", "campaign", "duel", "market", "profile", "friends", "settings", "leaderboard", "game", "minigames", "minigame"];
   let activeDuel = null;   // { code, seed, role, mode, opp, oppScore, channel }
   let selectedMode = "classic";
   let targetPassed = false;
@@ -11,7 +11,7 @@ const App = (() => {
     for (const s of screens) $("#screen-" + s).classList.toggle("hidden", s !== name);
     if (name === "menu") refreshCoins();
   }
-  function back() { stopLive(); stopOppPoll(); closeDuelChannel(); setCampaignFinish(false); Game.quit(); show("menu"); }
+  function back() { stopLive(); stopOppPoll(); closeDuelChannel(); setCampaignFinish(false); Game.quit(); try { MiniGames.stop(); } catch {} show("menu"); }
 
   // ---- Takma ad + altın ----
   const nickEl = $("#nick");
@@ -40,6 +40,7 @@ const App = (() => {
     if (dest === "campaign") { buildLevels(); show("campaign"); }
     else if (dest === "endless") startEndless();
     else if (dest === "duel") { openDuelScreen(); show("duel"); }
+    else if (dest === "minigames") { MiniGames.buildMenu(); show("minigames"); }
     else if (dest === "leaderboard") { show("leaderboard"); loadLeaderboard("daily"); }
     else if (dest === "market") { buildMarket(); show("market"); }
     else if (dest === "profile") { showProfile(null); show("profile"); }

@@ -21,6 +21,7 @@
       <button class="btn big" data-go="campaign" id="btn-campaign">🧭 Macera</button>
       <button class="btn big" data-go="endless">♾️ Sonsuz Mod</button>
       <button class="btn big" data-go="duel">⚔️ Düello</button>
+      <button class="btn big" data-go="minigames">🎮 Mini Oyunlar</button>
       <button class="btn big ghost" data-go="market">🛒 Market</button>
       <div class="menu-row">
         <button class="btn ghost half" data-go="leaderboard">🏆 Skorlar</button>
@@ -60,6 +61,28 @@
         <button class="btn" id="duel-join">Katıl</button>
       </div>
       <div id="duel-info" class="duel-info hidden"></div>
+    </div>
+  </section>
+
+  <!-- MİNİ OYUNLAR -->
+  <section class="screen hidden" id="screen-minigames">
+    <div class="topnav"><button class="back" data-back>‹ Geri</button><h2>🎮 Mini Oyunlar</h2><span class="coins-mini">🪙 <b id="mini-coins">0</b></span></div>
+    <p class="muted">Farklı tarzda küçük oyunlar — hepsi altın kazandırır!</p>
+    <div id="mini-list" class="mini-list"></div>
+  </section>
+
+  <!-- MİNİ OYUN EKRANI -->
+  <section class="screen hidden" id="screen-minigame">
+    <div class="game-wrap">
+      <header class="topbar">
+        <button class="icon-btn" id="mini-back" title="Geri">‹</button>
+        <div id="mini-hud" class="hud"></div>
+        <div class="card score-card"><span class="label">SKOR</span><span id="mini-score" class="value">0</span></div>
+      </header>
+      <div class="play-area mini-area">
+        <div class="jar"><canvas id="mini-canvas"></canvas><div id="mini-dom" class="mini-dom hidden"></div></div>
+      </div>
+      <p class="hint" id="mini-hint"></p>
     </div>
   </section>
 
@@ -165,6 +188,7 @@
 <script src="supabase-client.js"></script>
 <script src="store.js"></script>
 <script src="game.js"></script>
+<script src="minigames.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
