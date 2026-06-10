@@ -139,7 +139,8 @@ const DUEL_MODES = [
   { id: "classic",  name: "Klasik Yarış",  emoji: "⚔️", timeLimit: 120, desc: "2 dakikada en yüksek skoru yapan kazanır.", win: "score" },
   { id: "target",   name: "Hedef Yarışı",  emoji: "🏁", target: 1500, timeLimit: 0, desc: "1500 skora ilk ulaşan kazanır, süre yok.", win: "target" },
   { id: "survival", name: "Hayatta Kal",   emoji: "💀", risingDeath: 2.5, timeLimit: 0, desc: "Ölüm çizgisi yükselir, son ayakta kalan kazanır.", win: "survive" },
-  { id: "battle",   name: "Meyve Savaşı",  emoji: "🥊", risingDeath: 1.2, attacks: true, timeLimit: 0, desc: "1'e 1 savaş! Birleştirdikçe rakibe meyve fırlat, son ayakta kalan kazanır.", win: "survive" },
+  { id: "battle",   name: "Meyve Savaşı",  emoji: "🥊", attacks: true, deathLineRatio: 0.08, timeLimit: 0, desc: "1'e 1 savaş! Birleştirdikçe rakibe meyve fırlat. Meyvesi önce çizgiye değen kaybeder.", win: "survive" },
+  { id: "tug",      name: "Halat Çekme",   emoji: "🪢", attacks: true, gap: 600, deathLineRatio: 0.1, timeLimit: 0, desc: "Çekişmeli kapışma! Skoru çek, rakibe 600 fark atan kazanır. Birleştirmeler rakibe meyve de yollar.", win: "tug" },
   { id: "coop",     name: "Ortak Hedef",   emoji: "🤝", target: 4000, timeLimit: 0, desc: "İkiniz birlikte 4000 skora ulaşın, süre yok.", win: "coop" },
 ];
 function getDuelMode(id) { return DUEL_MODES.find((m) => m.id === id) || DUEL_MODES[0]; }
@@ -158,5 +159,7 @@ const BASE_CFG = {
   bombChance: 0,
   risingDeath: 0,
   attacks: false,
+  deathLineRatio: 0.15,
+  gap: 0,
   seed: null,
 };

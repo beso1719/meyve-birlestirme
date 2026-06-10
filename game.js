@@ -39,7 +39,7 @@ const Game = (() => {
     S = (W * cfg.jarWidthRatio) / 450;
     wallInset = (W * (1 - cfg.jarWidthRatio)) / 2;
     DROP_Y = H * 0.09;
-    deathY0 = H * 0.15;
+    deathY0 = H * (cfg.deathLineRatio || 0.15);
     DEATH_Y = deathY0;
   }
 

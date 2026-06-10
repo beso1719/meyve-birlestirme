@@ -418,6 +418,7 @@ const App = (() => {
     if (m.target) c.target = m.target;
     if (m.risingDeath) c.risingDeath = m.risingDeath;
     if (m.attacks) c.attacks = true;
+    if (m.deathLineRatio) c.deathLineRatio = m.deathLineRatio;
     return c;
   }
 
@@ -431,7 +432,7 @@ const App = (() => {
     closeDuelChannel();
     if (!activeDuel) return;
     activeDuel.channel = DB.openDuelChannel(activeDuel.code, {
-      onState: (payload) => { oppLive = payload; updateDuelLive(); checkOppDead(); },
+      onState: (payload) => { oppLive = payload; updateDuelLive(); checkOppDead(); checkTug(); },
       onStart: () => { if (!Game.isRunning()) playDuel(); },
       onEnd: (payload) => handleOppEnd(payload),
       onAttack: (payload) => { if (Game.isRunning() && payload) Game.receiveAttack(payload.power); },
@@ -449,6 +450,7 @@ const App = (() => {
       if (!activeDuel || !activeDuel.channel) return;
       const st = Game.getLiveState();
       activeDuel.channel.send({ nick: DB.getNick() || "Rakip", score: st.score, topTier: st.topTier, dead: st.dead });
+      checkTug();
     }, 450);
   }
   function stopLive() { if (liveTimer) clearInterval(liveTimer); liveTimer = null; }
@@ -462,6 +464,13 @@ const App = (() => {
       const total = myScore + (oppLive ? oppLive.score : 0);
       box.innerHTML = `🤝 Ortak: <b>${total}</b> / ${mode.target}
         <div class="bar"><i style="width:${Math.min(100, total / mode.target * 100)}%"></i></div>`;
+    } else if (mode && mode.win === "tug") {
+      const opp = oppLive ? oppLive.score : 0, gap = mode.gap || 600;
+      const diff = myScore - opp;
+      const pct = 50 + Math.max(-50, Math.min(50, diff / gap * 50));
+      const lead = diff > 0 ? `+${diff} önde` : diff < 0 ? `${diff} geride` : "berabere";
+      box.innerHTML = `🪢 <b>${lead}</b> (Sen ${myScore} · Rakip ${opp})
+        <div class="bar tug"><i style="width:${pct}%"></i></div>`;
     } else if (oppLive) {
       const tag = oppLive.dead ? "💀" : (getSkin(Store.equipped()).set[oppLive.topTier] || {}).emoji || "";
       box.innerHTML = `Rakip <b>${esc(oppLive.nick || "")}</b>: <b>${oppLive.score}</b> ${tag}`;
@@ -482,6 +491,16 @@ const App = (() => {
     if (mode.win === "survive" && oppLive && oppLive.dead) Game.endNow(true, "opp-dead");
   }
 
+  // Halat çekme: skor farkı eşiğe ulaşınca biter — önde olan kazanır
+  function checkTug() {
+    if (!activeDuel || activeDuel.finished || !Game.isRunning() || !oppLive) return;
+    const mode = getDuelMode(activeDuel.mode);
+    if (mode.win !== "tug") return;
+    const my = Game.getLiveState().score, opp = oppLive.score || 0, gap = mode.gap || 600;
+    if (my - opp >= gap) Game.endNow(true, "tug-win");
+    else if (opp - my >= gap) Game.endNow(false, "tug-lose");
+  }
+
   // Rakip oyununu bitirdi (kanaldan "end" geldi): skorunu sakla, gerekiyorsa benim oyunumu da bitir.
   function handleOppEnd(p) {
     if (!activeDuel || !p) return;
@@ -493,6 +512,7 @@ const App = (() => {
       // Hayatta kal: rakip öldüyse ben kazandım. Hedef yarışı: rakip hedefe ulaştıysa ben kaybettim.
       if (mode.win === "survive" && p.dead) Game.endNow(true, "opp-dead");
       else if (mode.win === "target" && p.won) Game.endNow(false, "opp-target");
+      else if (mode.win === "tug") Game.endNow(Game.getLiveState().score >= (p.metric || 0), "opp-tug");
     } else if (activeDuel.finished) {
       // Ben zaten bitirmiştim, rakibi bekliyordum → sonucu güncelle.
       resolveDuelResult();

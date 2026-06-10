@@ -289,6 +289,8 @@ body {
   font-size: 14px; text-align: center; width: min(94vw, 460px); box-shadow: 0 4px 12px rgba(180,90,40,.2); }
 .duel-live .bar { height: 8px; background: rgba(0,0,0,.12); border-radius: 6px; margin-top: 6px; overflow: hidden; }
 .duel-live .bar i { display: block; height: 100%; background: linear-gradient(90deg,#ff7a59,#ff4d6d); }
+.duel-live .bar.tug { background: linear-gradient(90deg,#e74c3c33,#2ecc7133); }
+.duel-live .bar.tug i { background: linear-gradient(90deg,#2ecc71,#27ae60); transition: width .25s ease; border-right: 3px solid #145a32; }
 
 /* ===== düello modları ===== */
 .mode-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; width: 100%; }
