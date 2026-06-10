@@ -409,7 +409,7 @@ const App = (() => {
     const mode = getDuelMode(activeDuel.mode);
     const cfg = Object.assign({ mode: "duel", seed: activeDuel.seed, win: mode.win }, modeCfg(mode));
     show("game"); setDuelLive(true); setCampaignFinish(false); updateDuelLive();
-    Game.start(cfg, { onStats: updateHud, onEnd: (r) => endGame(r) });
+    Game.start(cfg, { onStats: updateHud, onEnd: (r) => endGame(r), onAttack: sendAttack });
     startLive();
   }
   function modeCfg(m) {
@@ -417,7 +417,13 @@ const App = (() => {
     if (m.timeLimit) c.timeLimit = m.timeLimit;
     if (m.target) c.target = m.target;
     if (m.risingDeath) c.risingDeath = m.risingDeath;
+    if (m.attacks) c.attacks = true;
     return c;
+  }
+
+  // Meyve savaşı: ben birleştirince rakibe meyve fırlat
+  function sendAttack(power) {
+    if (activeDuel && activeDuel.channel) activeDuel.channel.attack({ power });
   }
 
   // ---- Canlı düello kanalı ----
@@ -428,6 +434,7 @@ const App = (() => {
       onState: (payload) => { oppLive = payload; updateDuelLive(); checkOppDead(); },
       onStart: () => { if (!Game.isRunning()) playDuel(); },
       onEnd: (payload) => handleOppEnd(payload),
+      onAttack: (payload) => { if (Game.isRunning() && payload) Game.receiveAttack(payload.power); },
       onPresence: (devices) => {
         const mine = DB.deviceId();
         activeDuel.oppPresent = devices.some((d) => d && d !== mine);

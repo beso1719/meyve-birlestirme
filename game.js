@@ -149,10 +149,13 @@ const Game = (() => {
       World.remove(world, a); World.remove(world, b);
       if (a.tier >= MAX_TIER) {
         addEffect(nx, ny, MAX_TIER); addScore(100); sfx("merge", MAX_TIER); buzz(50);
+        if (cfg.attacks && cbs.onAttack) cbs.onAttack(4);
       } else {
         const nt = a.tier + 1;
         World.add(world, makeFruit(nt, nx, ny, false));
         addEffect(nx, ny, nt); addScore((nt + 1) * 2); sfx("merge", nt); buzz(25);
+        // Meyve savaşı: büyük birleştirmeler rakibe meyve fırlatır
+        if (cfg.attacks && nt >= 3 && cbs.onAttack) cbs.onAttack(nt - 2);
       }
     }
   }
@@ -330,6 +333,22 @@ const Game = (() => {
     return { score: Math.round(score), topTier, dead: !running, timeLeft: cfg && cfg.timeLimit ? Math.ceil(timeLeft) : null };
   }
 
+  // Rakipten gelen saldırı: tepeden rastgele çürük meyveler dökülür (savaş modu)
+  function receiveAttack(power) {
+    if (!running || !world) return;
+    const n = Math.max(1, Math.min(6, Math.round(power) || 1));
+    const minX = wallInset + WALL + FRUITS[0].r * S;
+    const maxX = W - wallInset - WALL - FRUITS[0].r * S;
+    for (let i = 0; i < n; i++) {
+      const x = minX + Math.random() * Math.max(1, maxX - minX);
+      const f = makeFruit(0, x, DROP_Y * 0.4, false);
+      Body.setVelocity(f, { x: 0, y: 7 });
+      World.add(world, f);
+    }
+    for (let i = 0; i < n; i++) addEffect(minX + Math.random() * (maxX - minX), DROP_Y, 0);
+    sfx("drop");
+  }
+
   // kontroller
   function pointerX(e) {
     const rect = canvas.getBoundingClientRect();
@@ -344,5 +363,5 @@ const Game = (() => {
   window.addEventListener("keydown", (e) => { if (e.code === "Space") { e.preventDefault(); drop(); } });
   window.addEventListener("resize", () => { if (running) { fitCanvas(); rebuildWalls(); } });
 
-  return { start, stop, quit, pause, resume, isRunning, getLiveState, endNow };
+  return { start, stop, quit, pause, resume, isRunning, getLiveState, endNow, receiveAttack };
 })();

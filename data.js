@@ -137,8 +137,9 @@ function getSkin(id) { return SKINS.find((s) => s.id === id) || SKINS[0]; }
 // ---- Düello modları ----
 const DUEL_MODES = [
   { id: "classic",  name: "Klasik Yarış",  emoji: "⚔️", timeLimit: 120, desc: "2 dakikada en yüksek skoru yapan kazanır.", win: "score" },
-  { id: "target",   name: "Hedef Yarışı",  emoji: "🏁", target: 1500, timeLimit: 180, desc: "1500 skora ilk ulaşan kazanır.", win: "target" },
+  { id: "target",   name: "Hedef Yarışı",  emoji: "🏁", target: 1500, timeLimit: 0, desc: "1500 skora ilk ulaşan kazanır, süre yok.", win: "target" },
   { id: "survival", name: "Hayatta Kal",   emoji: "💀", risingDeath: 2.5, timeLimit: 0, desc: "Ölüm çizgisi yükselir, son ayakta kalan kazanır.", win: "survive" },
+  { id: "battle",   name: "Meyve Savaşı",  emoji: "🥊", risingDeath: 1.2, attacks: true, timeLimit: 0, desc: "1'e 1 savaş! Birleştirdikçe rakibe meyve fırlat, son ayakta kalan kazanır.", win: "survive" },
   { id: "coop",     name: "Ortak Hedef",   emoji: "🤝", target: 4000, timeLimit: 0, desc: "İkiniz birlikte 4000 skora ulaşın, süre yok.", win: "coop" },
 ];
 function getDuelMode(id) { return DUEL_MODES.find((m) => m.id === id) || DUEL_MODES[0]; }
@@ -156,5 +157,6 @@ const BASE_CFG = {
   target: null,
   bombChance: 0,
   risingDeath: 0,
+  attacks: false,
   seed: null,
 };
